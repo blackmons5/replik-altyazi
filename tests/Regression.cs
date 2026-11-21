@@ -69,6 +69,10 @@ namespace Replik {
                 g.DrawString("I'll be right back.",regular,Brushes.White,360,66);
                 var result=reader.Read(crop,out score,true);
                 Check(result.Contains("Stay here") && result.Contains("be right back"),"Keep a centered two-line subtitle: "+result);
+                g.Clear(Color.FromArgb(35,39,44));
+                g.DrawString("Stay here.",regular,Brushes.White,386,40);
+                g.DrawString("Stay here.",regular,Brushes.White,386,66);
+                Check(reader.Read(crop,out score,true)=="Stay here.","Ignore a duplicated OCR row");
             }
         }
         static void Main() {
@@ -133,6 +137,28 @@ namespace Replik {
             Check(completedRead.Tick(0)=="Get in the","Show the initial read");
             completedRead.Observe("Get in the car!",.97f,250);
             Check(completedRead.Tick(250)=="Get in the car!","Complete a partial reading in place");
+            int calls=0;
+            var returns=new Dialogue(s=>{calls++; return Task.FromResult("Burada kal.");});
+            returns.Observe("Stay right here.",.96f,0);
+            Check(returns.Tick(0)=="Burada kal.","First reading appears");
+            returns.Observe("",0,300);
+            returns.Observe("",0,1200);
+            Check(returns.Tick(1200)=="","A missing caption can clear normally");
+            returns.Observe("Stay right here!",.97f,1450);
+            Check(returns.Tick(1450)==null && calls==1,"Do not reopen the same cue after an OCR dropout");
+            returns.Observe("",0,1600);
+            returns.Observe("Stay right here.",.96f,3600);
+            Check(returns.Tick(3600)=="Burada kal." && calls==1,"Genuine repeat after a longer break can use the cache");
+            var seen=new List<string>();
+            var noisy=new Dialogue(s=>{seen.Add(s); return Task.FromResult(s);});
+            noisy.Observe("Stay right here.",.96f,0);
+            noisy.Observe("Okay, then.",.96f,180);
+            noisy.Observe("Stay right here!",.96f,300);
+            Check(noisy.Tick(300)=="Stay right here." && seen.Count==2,"No third queued request when OCR returns to the first line");
+            Check(noisy.Tick(1450)=="Okay, then." && noisy.Tick(3200)=="","No third appearance after the intervening cue");
+            var duplicateResult=new Dialogue(s=>Task.FromResult("Burada kal.\r\nBURADA KAL!"));
+            duplicateResult.Observe("Stay right here.",.95f,0);
+            Check(duplicateResult.Tick(0)=="Burada kal.","Drop repeated lines in a translation response");
             var patch=new Updates.Asset {name="Replik-Guncelleme-x64-r1.exe",size=100,digest="sha256:"+new string('1',64)};
             var full=new Updates.Asset {name=Updates.Full,size=200,digest=patch.digest};
             string prefix="https://github.com/blackmons5/replik-altyazi/releases/download/v0.3.0/";

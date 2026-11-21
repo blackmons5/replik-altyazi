@@ -6,42 +6,65 @@ using System.Threading.Tasks;
 namespace Replik {
     // Called by the capture worker. Requests may finish in any order; captions leave in reading order.
     sealed class Dialogue {
-        sealed class Cue { internal string Text; internal float Confidence; internal long Seen; internal Task<string> Job; }
+        const int ReadingGap=500;
+        const int ReturnWindow=1800;
+        const int VariationWindow=850;
+        sealed class Cue {
+            internal string Text;
+            internal float Confidence;
+            internal long Seen,LastSeen;
+            internal Task<string> Job;
+        }
         readonly LinkedList<Cue> waiting=new LinkedList<Cue>();
         readonly Dictionary<string,Task<string>> active=new Dictionary<string,Task<string>>(StringComparer.OrdinalIgnoreCase);
         readonly Dictionary<string,string> cache=new Dictionary<string,string>(StringComparer.OrdinalIgnoreCase);
         readonly Func<string,Task<string>> translate;
-        string last="",shownSource="",shown="";
+        Cue captured,earlierCapture,visibleCue;
+        string shown="";
         string uncertain="";
-        long readableUntil,lastSeen,shownSeen,uncertainSeen,blankSince=-1;
-        float lastConfidence;
-        public Dialogue(Func<string,Task<string>> translate) { this.translate=translate; }
-        static bool Same(string a,string b) {return string.Equals(a,b,StringComparison.OrdinalIgnoreCase);}
+        long readableUntil,uncertainSeen,blankSince=-1;
+        public Dialogue(Func<string,Task<string>> translate) {
+            this.translate=async text=>SubtitleText.RemoveRepeatedRows(await translate(text).ConfigureAwait(false));
+        }
         static bool Extends(string longer,string shorter) {
             if(shorter.Length<3 || longer.Length<=shorter.Length || ".!?".IndexOf(shorter[shorter.Length-1])>=0) return false;
             return longer.StartsWith(shorter,StringComparison.OrdinalIgnoreCase) && char.IsWhiteSpace(longer[shorter.Length]);
+        }
+        static bool MatchesCapture(string text,float confidence,Cue cue,long now) {
+            bool adjacent=now-cue.LastSeen<=VariationWindow;
+            return SubtitleText.SameLine(text,cue.Text,adjacent && Math.Min(confidence,cue.Confidence)<.88f,adjacent)
+                || (adjacent && SubtitleText.IsClippedRead(text,cue.Text));
         }
         internal void Observe(string text,float confidence,long now) {
             text=SubtitleText.Clean(text);
             if(text.Length==0 || confidence<.55f) {
                 uncertain="";
                 if(blankSince<0) blankSince=now;
-                if(now-blankSince>=500) last="";
                 return;
             }
-            if(blankSince>=0 && now-blankSince>=500) last="";
-            blankSince=-1;
+            bool resumed=blankSince>=0;
             var tail=waiting.Last;
-            bool adjacent=now-lastSeen<=850;
-            bool fuzzy=adjacent && Math.Min(confidence,lastConfidence)<.88f;
-            if(SubtitleText.SameLine(text,last,fuzzy,adjacent) || (adjacent && SubtitleText.IsClippedRead(text,last))) {
-                if(tail!=null && tail.Value.Job==null && Same(tail.Value.Text,last) && confidence>=tail.Value.Confidence+.10f &&
-                    !SubtitleText.IsClippedRead(text,last)) {
-                    tail.Value.Text=text; tail.Value.Confidence=confidence; tail.Value.Job=null;
+            if(captured!=null && (!resumed || now-captured.LastSeen<=ReturnWindow) &&
+                MatchesCapture(text,confidence,captured,now)) {
+                if(tail!=null && tail.Value==captured && captured.Job==null && confidence>=captured.Confidence+.10f &&
+                    !SubtitleText.IsClippedRead(text,captured.Text)) {
+                    captured.Text=text;
+                    captured.Confidence=confidence;
                 }
-                // Keep the last cue's key aligned with the translation currently on screen or in the queue.
-                if(tail!=null && Same(tail.Value.Text,text)) {last=text; lastConfidence=tail.Value.Confidence;}
-                lastSeen=now; uncertain="";
+                captured.LastSeen=now;
+                blankSince=-1;
+                uncertain="";
+                return;
+            }
+            // An OCR variant can briefly sit between two readings of the same longer subtitle.
+            if(earlierCapture!=null && earlierCapture.Text.Length>=12 && now-captured.Seen<=350 &&
+                now-earlierCapture.LastSeen<=ReturnWindow && MatchesCapture(text,confidence,earlierCapture,now)) {
+                earlierCapture.LastSeen=now;
+                var intervening=captured;
+                captured=earlierCapture;
+                earlierCapture=intervening;
+                blankSince=-1;
+                uncertain="";
                 return;
             }
             if(confidence<.72f && (now-uncertainSeen>350 || !SubtitleText.SameLine(text,uncertain,true))) {
@@ -49,13 +72,18 @@ namespace Replik {
                 return;
             }
             uncertain="";
-            if(tail!=null && last.Length>0 && Extends(text,tail.Value.Text)) {
-                tail.Value.Text=text; tail.Value.Confidence=confidence; tail.Value.Job=null;
+            blankSince=-1;
+            if(tail!=null && tail.Value==captured && now-captured.LastSeen<=VariationWindow && Extends(text,captured.Text)) {
+                captured.Text=text;
+                captured.Confidence=confidence;
+                captured.LastSeen=now;
+                captured.Job=null;
             } else {
                 if(waiting.Count>=256) throw new InvalidOperationException("Çeviri kuyruğu doldu. Gemini bağlantısını kontrol edip yeniden başlat.");
-                waiting.AddLast(new Cue { Text=text,Confidence=confidence,Seen=now });
+                earlierCapture=captured;
+                captured=new Cue { Text=text,Confidence=confidence,Seen=now,LastSeen=now };
+                waiting.AddLast(captured);
             }
-            last=text; lastSeen=now; lastConfidence=confidence;
         }
         internal string Tick(long now) {
             foreach(var entry in active.Where(p=>p.Value.IsCompleted).ToArray()) {
@@ -78,28 +106,28 @@ namespace Replik {
                 var cue=first.Value;
                 string translated=cue.Job.GetAwaiter().GetResult();
                 if(string.IsNullOrWhiteSpace(translated)) throw new InvalidOperationException("Çeviri motoru boş yanıt döndürdü.");
-                bool nearby=cue.Seen-shownSeen<=850;
+                bool nearby=visibleCue!=null && cue.Seen-visibleCue.Seen<=VariationWindow;
                 bool repeated=shown.Length>0 && (SubtitleText.SameLine(translated,shown,false) ||
-                    (nearby && (SubtitleText.SameLine(cue.Text,shownSource,cue.Confidence<.88f,true) ||
-                    SubtitleText.IsClippedRead(cue.Text,shownSource))));
+                    (nearby && MatchesCapture(cue.Text,cue.Confidence,visibleCue,cue.Seen)));
                 if(repeated) {
                     waiting.RemoveFirst();
-                    shownSource=cue.Text;
-                    shownSeen=cue.Seen;
+                    visibleCue=cue;
                     first=waiting.First;
                     continue;
                 }
-                bool completesShown=shown.Length>0 && nearby && Extends(cue.Text,shownSource);
+                bool completesShown=shown.Length>0 && nearby && Extends(cue.Text,visibleCue.Text);
                 if(!completesShown && now<readableUntil) return null;
                 waiting.RemoveFirst();
                 shown=translated;
-                shownSource=cue.Text;
-                shownSeen=cue.Seen;
+                visibleCue=cue;
                 readableUntil=now+Math.Min(3500,Math.Max(1150,500+shown.Length*30));
                 return shown;
             }
-            if(now>=readableUntil && shown.Length>0 && !Same(last,shownSource)) {
-                shown=""; return "";
+            bool readingEnded=blankSince>=0 && now-blankSince>=ReadingGap;
+            if(now>=readableUntil && shown.Length>0 && (readingEnded || captured!=visibleCue)) {
+                shown="";
+                visibleCue=null;
+                return "";
             }
             return null;
         }
@@ -108,7 +136,13 @@ namespace Replik {
             if(now>=readableUntil && first!=null && first.Value.Job!=null && first.Value.Job.IsCompleted) return Task.FromResult(0);
             return active.Count==0?frame:Task.WhenAny(active.Values.Cast<Task>().Concat(new[]{frame}));
         }
-        internal void Pause() {waiting.Clear(); last=shown=shownSource=uncertain=""; readableUntil=0; blankSince=-1;}
+        internal void Pause() {
+            waiting.Clear();
+            captured=earlierCapture=visibleCue=null;
+            shown=uncertain="";
+            readableUntil=0;
+            blankSince=-1;
+        }
         internal void Finish() {try { Task.WaitAll(active.Values.ToArray()); } catch(AggregateException) { } }
     }
 }

@@ -1,6 +1,6 @@
-Hazır çeviriler sırayla ve tek tek gösterilir. Okuma süresi metin uzunluğuna göre 1,15–3,5 saniye arasında değişir. Çeviri istekleri bu sırada arka planda devam eder.
+OCR aynı repliği kısa bir kesintiden veya araya giren tek bir okumadan sonra yeniden yakalarsa Replik o repliği ikinci kez kuyruğa almaz. Altyazı alanında veya çeviri yanıtında tekrarlanan aynı satır bir kez gösterilir.
 
-Kısa ekran okuma kesintileri, kırpılmış okumalar ve benzer harflerin karışması aynı repliğin yeniden gösterilmesine yol açmaz. Aynı Türkçe sonuç da üst üste yazılmaz. GTA 6 **Alt** OCR filtresi bu sürümde de kullanılır.
+Uzun bir aradan sonra gerçekten tekrarlanan replik yeniden gösterilebilir. Altyazılar sırayla ve metin uzunluğuna göre okunabilecek süreyle gösterilir.
 
 **0.2.1 ve üzeri kuruluysa** uygulamadaki **Güncelle** düğmesini kullanın. **0.2.0** kullanıcıları Replik-Guncelleme-x64-r1.exe dosyasıyla yükseltebilir. İlk kurulum için Replik-Kurulum-x64.exe dosyasını kullanın.
 

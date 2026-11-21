@@ -79,7 +79,7 @@ namespace Replik {
         }
         static IEnumerable<Row> SubtitleRows(List<Row> rows,int height) {
             var main=rows.OrderBy(r=>Math.Abs(r.Bounds.Top+r.Bounds.Height*.5-height*.53)/height-.12*r.Confidence).First();
-            var neighbor=rows.Where(r=>r!=main &&
+            var neighbor=rows.Where(r=>r!=main && !SubtitleText.SameLine(r.Text,main.Text,false,true) &&
                 Math.Abs(r.Bounds.Height-main.Bounds.Height)<=Math.Max(3,main.Bounds.Height*.37) &&
                 Math.Abs(r.Bounds.Top+r.Bounds.Height*.5-main.Bounds.Top-main.Bounds.Height*.5)<=main.Bounds.Height*1.85)
                 .OrderBy(r=>Math.Abs(r.Bounds.Top-main.Bounds.Top)).FirstOrDefault();

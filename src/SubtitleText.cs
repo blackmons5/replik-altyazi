@@ -50,6 +50,16 @@ namespace Replik {
             return string.Join(" ",Word.Matches(plain).Cast<Match>().Select(m=>m.Value));
         }
 
+        internal static string RemoveRepeatedRows(string text) {
+            if(text==null || text.IndexOf('\n')<0) return text;
+            var rows=new List<string>();
+            foreach(var part in text.Split('\n')) {
+                var row=part.Trim();
+                if(row.Length!=0 && (rows.Count==0 || !SameLine(row,rows[rows.Count-1],false))) rows.Add(row);
+            }
+            return string.Join(Environment.NewLine,rows);
+        }
+
         internal static bool IsClippedRead(string shorter,string longer) {
             if(shorter.Length>=longer.Length || shorter.Count(c=>c==' ')<2) return false;
             var part=Normalize(shorter);

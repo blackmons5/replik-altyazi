@@ -83,16 +83,11 @@ namespace Replik {
         }
         static async Task WorkerPipes() {
             using(var session=new CancellationTokenSource(TimeSpan.FromSeconds(90)))
-            using(var cue=CancellationTokenSource.CreateLinkedTokenSource(session.Token))
-            using(var pack=new LocalTranslator(session.Token,false))
-            using(var model=new LocalTranslator(session.Token,true)) {
-                var old=model.Read("We need to go back and tell everyone what happened.",cue.Token);
-                var ready=await pack.Read("Open the door.",session.Token);
-                Check(ready.provider=="GTA 6 paketi","Independent pack worker returned a lookup");
-                cue.Cancel();
-                try {await old;} catch(OperationCanceledException) {}
-                var current=await model.Read("Open the door.",session.Token);
-                Check(current.provider=="OPUS-MT" && current.text.ToLowerInvariant().Contains("kap"),"Model pipe stays aligned after cue cancellation");
+            using(var worker=new LocalTranslator(session.Token)) {
+                var ready=await worker.Read("Open the door.",false,session.Token);
+                Check(ready.provider=="GTA 6 paketi","Pack lookup returned");
+                var current=await worker.Read("Open the door.",true,session.Token,false);
+                Check(current.provider=="OPUS-MT" && current.text.ToLowerInvariant().Contains("kap"),"Local model returned Turkish");
             }
         }
         static void Main(string[] args) {
@@ -158,6 +153,17 @@ namespace Replik {
             rapid.Observe("Close it!",.80f,165,false);
             Check(rapid.Tick(165)==null,"Ungated screen text still needs confirmation");
             var recognized=new List<string>();
+            var slow=new TaskCompletionSource<string>();
+            int starts=0;
+            var dropout=new Dialogue((s,token)=>{starts++; token.Register(()=>slow.TrySetCanceled()); return slow.Task;});
+            dropout.Observe("Open the door!",.96f,0);
+            dropout.Tick(0);
+            dropout.Observe("",0,100);
+            dropout.Tick(350);
+            Check(slow.TrySetResult("Kapıyı aç!"),"A short OCR dropout keeps the pending translation");
+            Check(dropout.Tick(410)==null,"Do not display a completed result during an OCR gap");
+            dropout.Observe("Open the door!",.96f,490);
+            Check(dropout.Tick(490)=="Kapıyı aç!" && starts==1,"Show the translated cue on return without restarting the worker");
             var jitter=new Dialogue(s=>{recognized.Add(s); return Task.FromResult(s);});
             jitter.Observe("PHOTO STUDIO €] SELECT",.95f,0);
             Check(jitter.Tick(0)==null && recognized.Count==0,"Menu controls never reach the translator");

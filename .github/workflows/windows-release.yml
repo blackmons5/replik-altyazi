@@ -44,11 +44,26 @@ jobs:
           if ($p.ExitCode) {throw "Baseline installation failed: $($p.ExitCode)"}
           $model=Get-Item "$dir/local/model/model.bin"
           $stamp=$model.LastWriteTimeUtc
+          $previous=Join-Path $env:RUNNER_TEMP 'Replik-0.2.9-update.exe'
+          curl.exe -fsSL --retry 2 https://github.com/blackmons5/replik-altyazi/releases/download/v0.2.9/Replik-Guncelleme-x64-r1.exe -o $previous
+          if ($LASTEXITCODE -or (Get-FileHash $previous).Hash -ne '3dc7fa243fe03527b3f309d15a766ddf19466270c85b6ce54ed173e32f93090e') {throw 'Previous update download failed'}
+          $p=Start-Process $previous -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART') -WindowStyle Hidden -Wait -PassThru
+          if ($p.ExitCode) {throw "Previous update failed: $($p.ExitCode)"}
+          $csc=Join-Path $env:WINDIR 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
+          & $csc /nologo /codepage:65001 /platform:x64 /target:exe "/out:$dir/InstalledCaption.exe" /r:System.Drawing.dll /r:System.Windows.Forms.dll (Get-Item tests/InstalledCaption.cs).FullName
+          if ($LASTEXITCODE) {throw 'Installed application test build failed'}
+          Remove-Item Env:PYTHONUTF8 -ErrorAction SilentlyContinue
+          $env:OMP_THREAD_LIMIT='1'
+          & "$dir/InstalledCaption.exe"
+          Write-Host "0.2.9 comparison exit code: $LASTEXITCODE"
           $patch=(Get-Item dist/Replik-Guncelleme-x64-r1.exe).FullName
           $p=Start-Process $patch -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART') -WindowStyle Hidden -Wait -PassThru
           if ($p.ExitCode) {throw "Upgrade failed: $($p.ExitCode)"}
           if ((Get-FileHash "$dir/Replik.exe").Hash -ne (Get-FileHash build/app/Replik.exe).Hash) {throw 'Program not updated'}
           if ((Get-Item $model.FullName).LastWriteTimeUtc -ne $stamp) {throw 'Existing model was replaced'}
+          if ((Get-FileHash "$dir/local/translate.py").Hash -ne (Get-FileHash build/app/local/translate.py).Hash) {throw 'Worker not updated'}
+          & "$dir/InstalledCaption.exe"
+          if ($LASTEXITCODE) {throw 'Installed OCR to Turkish caption failed'}
       - name: Publish verified installer
         env:
           GH_TOKEN: ${{ github.token }}

@@ -102,7 +102,9 @@ namespace Replik {
         internal string Tick(long now) {
             CollectRetired();
             var current=blankSince>=0 && now-blankSince>=ReadingGap?null:captured;
-            if(pending!=null && pending.Cue!=current) RetirePending();
+            // Hide immediately after a dropout, but keep work for the same cue
+            // through a short OCR gap. A different confirmed cue always supersedes it.
+            if(pending!=null && (pending.Cue!=captured || (current==null && now-blankSince>=ReturnWindow))) RetirePending();
             if(current==null) return Show(null,"");
             if(current==visibleCue) return null;
 
@@ -125,7 +127,7 @@ namespace Replik {
             return Show(current,translated);
         }
         internal Task NextEvent(Task frame) {
-            return pending==null?frame:Task.WhenAny(frame,pending.Translation);
+            return pending==null || blankSince>=0 && pending.Translation.IsCompleted?frame:Task.WhenAny(frame,pending.Translation);
         }
         internal void Pause() {
             RetirePending();

@@ -17,14 +17,14 @@ assert "teşekkür" in results[0].casefold(), results
 assert "kap" in results[1].casefold(), results
 print("Bundled CPU translation passed:", ascii(results))
 def request(text):
-    return json.dumps({"line": base64.b64encode(text.encode()).decode()})
+    return json.dumps({"line": base64.b64encode(text.encode()).decode(), "local": True, "pack": False})
 
-# Cancel the first request during cold start, then translate another on the same pipe.
-with subprocess.Popen([sys.executable, "-B", "-u", str(base / "translate.py"), "--model"],
-                      stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True) as worker:
-    replies, _ = worker.communicate("\n".join([request(lines[0]), "cancel", request(lines[1]), ""]), timeout=90)
-    cancelled, current = map(json.loads, replies.splitlines())
-    assert worker.returncode == 0 and cancelled["text"] is None and "kap" in current["text"].casefold(), replies
+with subprocess.Popen([sys.executable, "-B", "-u", str(base / "translate.py")],
+                      stdin=subprocess.PIPE, stdout=subprocess.PIPE) as worker:
+    requests = "\n".join([request(lines[0]), request(lines[1]), ""]).encode("utf-8-sig")
+    replies, _ = worker.communicate(requests, timeout=90)
+    first, second = map(json.loads, replies.splitlines())
+    assert worker.returncode == 0 and "teşekkür" in first["text"].casefold() and "kap" in second["text"].casefold(), replies
 with tempfile.TemporaryDirectory() as tmp:
     folder = Path(tmp)
     pack = engine.GamePack(folder)

@@ -197,21 +197,28 @@ namespace Replik {
         public async Task Run(CancellationToken token) {
             using (var reader=new Reader())
             using (var requests=CancellationTokenSource.CreateLinkedTokenSource(token))
-            using (var pack=new LocalTranslator(requests.Token,false))
-            using (var opus=local?new LocalTranslator(requests.Token,true):null) {
+            using (var worker=new LocalTranslator(requests.Token)) {
                 var clock=System.Diagnostics.Stopwatch.StartNew();
                 var dialogue=new Dialogue(async (text,cueToken)=>{
                     reading(text);
                     var began=clock.ElapsedMilliseconds;
                     using(var linked=CancellationTokenSource.CreateLinkedTokenSource(requests.Token,cueToken)) {
-                        var result=await pack.Read(text,linked.Token).ConfigureAwait(false);
-                        var translated=SubtitleText.CleanTranslation(text,result.text);
-                        if(translated.Length==0 && local) {
-                            result=await opus.Read(text,linked.Token).ConfigureAwait(false);
+                        string translated="";
+                        try {
+                            var result=await worker.Read(text,local,linked.Token).ConfigureAwait(false);
                             translated=SubtitleText.CleanTranslation(text,result.text);
+                            if(translated.Length==0 && local && result.provider=="GTA 6 paketi") {
+                                result=await worker.Read(text,true,linked.Token,false).ConfigureAwait(false);
+                                translated=SubtitleText.CleanTranslation(text,result.text);
+                            }
+                        } catch(IOException) {
+                            if(local) throw;
+                        } catch(InvalidOperationException) {
+                            if(local) throw;
                         }
                         if(!local && string.IsNullOrEmpty(translated)) {
-                            report(result.pack+" • Gemini çeviriyor…",null);
+                            linked.Token.ThrowIfCancellationRequested();
+                            report("Gemini çeviriyor…",null);
                             translated=await Gemini.Translate(key,model,text,linked.Token).ConfigureAwait(false);
                         }
                         linked.Token.ThrowIfCancellationRequested();

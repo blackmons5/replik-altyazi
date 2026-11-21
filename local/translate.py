@@ -1,6 +1,5 @@
 """Replik's persistent CPU translator. The parent exchanges ASCII JSON lines."""
 import base64
-from concurrent.futures import ThreadPoolExecutor
 import gzip
 import hashlib
 import json
@@ -128,65 +127,34 @@ class Opus:
         self.engine = ctranslate2.Translator(str(MODEL), device="cpu", compute_type="int8",
                                             intra_threads=min(4, os.cpu_count() or 1))
 
-    def translate(self, text, cancelled=None):
+    def translate(self, text):
         pieces = self.source.encode(text, out_type=str) + ["</s>"]
-        output = self.engine.translate_batch([pieces], beam_size=1, max_decoding_length=256,
-                                             disable_unk=True,
-                                             callback=(lambda step: cancelled.is_set()) if cancelled else None)
+        output = self.engine.translate_batch([pieces], beam_size=1, max_decoding_length=256)
         return self.target.decode(output[0].hypotheses[0]).strip()
 
 
-def request_text(line):
-    return base64.b64decode(json.loads(line)["line"]).decode("utf-8")
-
-
-def send(reply):
-    print(json.dumps(reply, ensure_ascii=True), flush=True)
-
-
-def serve_model():
-    model = None
-
-    def translate(line, cancelled):
-        nonlocal model
-        try:
-            text = request_text(line)
-            model = model or Opus()
-            result = None if cancelled.is_set() else model.translate(text, cancelled)
-            send({"text": None if cancelled.is_set() else result, "provider": "OPUS-MT"})
-        except Exception as exc:
-            send({"error": str(exc)})
-
-    # The parent sends its next request only after consuming the previous reply.
-    with ThreadPoolExecutor(max_workers=1) as executor:
-        cancelled = None
-        for line in sys.stdin:
-            if line.strip() == "cancel":
-                if cancelled is not None:
-                    cancelled.set()
-            else:
-                cancelled = threading.Event()
-                executor.submit(translate, line, cancelled)
-
-
-def serve_pack():
+def serve():
     pack = GamePack(Path(os.environ["LOCALAPPDATA"]) / "Replik" / "packs")
     threading.Thread(target=pack.sync, daemon=True).start()
-    for line in sys.stdin:
+    model = None
+    for line in sys.stdin.buffer:
         try:
-            reply = {"text": pack.lookup(request_text(line)), "provider": "GTA 6 paketi", "pack": pack.status}
+            request = json.loads(line)
+            text = base64.b64decode(request["line"]).decode("utf-8")
+            translated = pack.lookup(text) if request.get("pack", True) else None
+            provider = "GTA 6 paketi"
+            if not translated and request["local"]:
+                model = model or Opus()
+                translated = model.translate(text)
+                provider = "OPUS-MT"
+            reply = {"text": translated, "provider": provider, "pack": pack.status}
         except Exception as exc:
             reply = {"error": str(exc)}
-        send(reply)
+        print(json.dumps(reply, ensure_ascii=True), flush=True)
 
 
 if __name__ == "__main__":
     if sys.argv[1:] == ["--sync-pack"]:
         GamePack(Path(os.environ["LOCALAPPDATA"]) / "Replik" / "packs").sync()
-    elif sys.argv[1:] in (["--model"], ["--pack"]):
-        # The .NET Framework pipe can include a UTF-8 BOM on its first write.
-        sys.stdin.reconfigure(encoding="utf-8-sig")
-        if sys.argv[1] == "--model":
-            serve_model()
-        else:
-            serve_pack()
+    else:
+        serve()

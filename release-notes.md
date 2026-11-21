@@ -1,6 +1,6 @@
-Varsayılan **Alt** modda GTA 6 için altyazı biçimi filtresi eklendi. Replik, ortalanmış ve yatay duran ince, açık renkli karakterlere öncelik verir. Kenardaki, eğik veya kalın yazılarla bilinen yol işaretlerini çeviri kuyruğuna almadan eler. Kısa ve iki satırlı replikler desteklenir.
+Hazır çeviriler sırayla ve tek tek gösterilir. Okuma süresi metin uzunluğuna göre 1,15–3,5 saniye arasında değişir. Çeviri istekleri bu sırada arka planda devam eder.
 
-Varsayılan **Alt** alanı GTA 6 için ekranın alt ortasına daraltıldı. Replik görüntüyü gri tonlamaya çevirir, küçük alanları 2,5 kata kadar büyütür, kontrastı artırır ve tekil parazitleri azaltır. Alt bölgede önce açık renkli altyazıyı ayıran yerel eşiklemeyi kullanır. İlk okuma zayıf kalırsa diğer yöntemi de dener.
+Kısa ekran okuma kesintileri, kırpılmış okumalar ve benzer harflerin karışması aynı repliğin yeniden gösterilmesine yol açmaz. Aynı Türkçe sonuç da üst üste yazılmaz. GTA 6 **Alt** OCR filtresi bu sürümde de kullanılır.
 
 **0.2.1 ve üzeri kuruluysa** uygulamadaki **Güncelle** düğmesini kullanın. **0.2.0** kullanıcıları Replik-Guncelleme-x64-r1.exe dosyasıyla yükseltebilir. İlk kurulum için Replik-Kurulum-x64.exe dosyasını kullanın.
 

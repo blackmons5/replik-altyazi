@@ -50,20 +50,34 @@ namespace Replik {
             return string.Join(" ",Word.Matches(plain).Cast<Match>().Select(m=>m.Value));
         }
 
-        internal static bool SameLine(string left,string right,bool allowFuzzy) {
+        internal static bool IsClippedRead(string shorter,string longer) {
+            if(shorter.Length>=longer.Length || shorter.Count(c=>c==' ')<2) return false;
+            var part=Normalize(shorter);
+            var whole=Normalize(longer);
+            if(part.Length*2<whole.Length || part==whole) return false;
+            return whole.StartsWith(part+" ",StringComparison.Ordinal) || whole.EndsWith(" "+part,StringComparison.Ordinal);
+        }
+
+        static string FoldGlyphs(string word) {
+            return word.Replace('l','i').Replace("rn","m").Replace("vv","w");
+        }
+
+        internal static bool SameLine(string left,string right,bool allowFuzzy,bool allowGlyphs=false) {
             if(left==right) return true;
             if(left.Length==0 || right.Length==0) return false;
             var a=Normalize(left); var b=Normalize(right);
             if(a==b) return a.Length>0;
-            if(!allowFuzzy || !Significant.Matches(a).Cast<Match>().Select(m=>m.Value)
+            if((!allowFuzzy && !allowGlyphs) || !Significant.Matches(a).Cast<Match>().Select(m=>m.Value)
                 .SequenceEqual(Significant.Matches(b).Cast<Match>().Select(m=>m.Value))) return false;
             var x=a.Split(' '); var y=b.Split(' ');
             int length=Math.Min(x.Length,y.Length);
-            if(length<6 || Math.Abs(x.Length-y.Length)>1) return false;
+            if(length<3 || Math.Abs(x.Length-y.Length)>1) return false;
             int prefix=0,suffix=0;
             while(prefix<length && x[prefix]==y[prefix]) prefix++;
             while(suffix<length-prefix && x[x.Length-1-suffix]==y[y.Length-1-suffix]) suffix++;
-            return prefix>=2 && suffix>=1 && Math.Max(x.Length,y.Length)-prefix-suffix<=1;
+            if(allowFuzzy && length>=6 && prefix>=2 && suffix>=1 && Math.Max(x.Length,y.Length)-prefix-suffix<=1) return true;
+            return allowGlyphs && x.Length==y.Length && prefix>=1 && suffix>=1 && length-prefix-suffix==1 &&
+                Math.Min(x[prefix].Length,y[prefix].Length)>=4 && FoldGlyphs(x[prefix])==FoldGlyphs(y[prefix]);
         }
     }
 }

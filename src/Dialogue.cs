@@ -6,15 +6,14 @@ using System.Threading.Tasks;
 namespace Replik {
     // Called by the capture worker. Requests may finish in any order; captions leave in reading order.
     sealed class Dialogue {
-        sealed class Cue { internal string Text; internal float Confidence; internal Task<string> Job; }
+        sealed class Cue { internal string Text; internal float Confidence; internal long Seen; internal Task<string> Job; }
         readonly LinkedList<Cue> waiting=new LinkedList<Cue>();
         readonly Dictionary<string,Task<string>> active=new Dictionary<string,Task<string>>(StringComparer.OrdinalIgnoreCase);
         readonly Dictionary<string,string> cache=new Dictionary<string,string>(StringComparer.OrdinalIgnoreCase);
         readonly Func<string,Task<string>> translate;
-        string last="",shownSource="",shown="",newestLine="";
+        string last="",shownSource="",shown="";
         string uncertain="";
-        int blanks;
-        long clearAfter,displayedAt,lastSeen,uncertainSeen;
+        long readableUntil,lastSeen,shownSeen,uncertainSeen,blankSince=-1;
         float lastConfidence;
         public Dialogue(Func<string,Task<string>> translate) { this.translate=translate; }
         static bool Same(string a,string b) {return string.Equals(a,b,StringComparison.OrdinalIgnoreCase);}
@@ -26,14 +25,18 @@ namespace Replik {
             text=SubtitleText.Clean(text);
             if(text.Length==0 || confidence<.55f) {
                 uncertain="";
-                if(++blanks>=2) last="";
+                if(blankSince<0) blankSince=now;
+                if(now-blankSince>=500) last="";
                 return;
             }
-            blanks=0;
+            if(blankSince>=0 && now-blankSince>=500) last="";
+            blankSince=-1;
             var tail=waiting.Last;
-            bool fuzzy=now-lastSeen<=850 && Math.Min(confidence,lastConfidence)<.88f;
-            if(SubtitleText.SameLine(text,last,fuzzy)) {
-                if(tail!=null && Same(tail.Value.Text,last) && confidence>=tail.Value.Confidence+.10f) {
+            bool adjacent=now-lastSeen<=850;
+            bool fuzzy=adjacent && Math.Min(confidence,lastConfidence)<.88f;
+            if(SubtitleText.SameLine(text,last,fuzzy,adjacent) || (adjacent && SubtitleText.IsClippedRead(text,last))) {
+                if(tail!=null && tail.Value.Job==null && Same(tail.Value.Text,last) && confidence>=tail.Value.Confidence+.10f &&
+                    !SubtitleText.IsClippedRead(text,last)) {
                     tail.Value.Text=text; tail.Value.Confidence=confidence; tail.Value.Job=null;
                 }
                 // Keep the last cue's key aligned with the translation currently on screen or in the queue.
@@ -50,7 +53,7 @@ namespace Replik {
                 tail.Value.Text=text; tail.Value.Confidence=confidence; tail.Value.Job=null;
             } else {
                 if(waiting.Count>=256) throw new InvalidOperationException("Çeviri kuyruğu doldu. Gemini bağlantısını kontrol edip yeniden başlat.");
-                waiting.AddLast(new Cue { Text=text,Confidence=confidence });
+                waiting.AddLast(new Cue { Text=text,Confidence=confidence,Seen=now });
             }
             last=text; lastSeen=now; lastConfidence=confidence;
         }
@@ -69,31 +72,43 @@ namespace Replik {
                     cue.Job=translate(cue.Text); active.Add(cue.Text,cue.Job);
                 }
             }
+            // Requests above keep moving while the current subtitle is being read.
             var first=waiting.First;
-            if(first!=null && first.Value.Job!=null && first.Value.Job.IsCompleted) {
-                var cue=first.Value; waiting.RemoveFirst();
+            while(first!=null && first.Value.Job!=null && first.Value.Job.IsCompleted) {
+                var cue=first.Value;
                 string translated=cue.Job.GetAwaiter().GetResult();
-                if(string.IsNullOrWhiteSpace(translated)) throw new InvalidOperationException("Gemini boş çeviri döndürdü.");
-                bool keepPrevious=shown.Length>0 && now-displayedAt<650 && !Extends(cue.Text,shownSource)
-                    && !SubtitleText.SameLine(cue.Text,shownSource,cue.Confidence<.88f)
-                    && !SubtitleText.SameLine(translated,newestLine,false);
-                shown=keepPrevious?newestLine+Environment.NewLine+translated:translated;
-                newestLine=translated; shownSource=cue.Text;
-                displayedAt=now;
-                clearAfter=now+Math.Min(waiting.Count>=2?1250:2400,Math.Max(850,shown.Length*32));
+                if(string.IsNullOrWhiteSpace(translated)) throw new InvalidOperationException("Çeviri motoru boş yanıt döndürdü.");
+                bool nearby=cue.Seen-shownSeen<=850;
+                bool repeated=shown.Length>0 && (SubtitleText.SameLine(translated,shown,false) ||
+                    (nearby && (SubtitleText.SameLine(cue.Text,shownSource,cue.Confidence<.88f,true) ||
+                    SubtitleText.IsClippedRead(cue.Text,shownSource))));
+                if(repeated) {
+                    waiting.RemoveFirst();
+                    shownSource=cue.Text;
+                    shownSeen=cue.Seen;
+                    first=waiting.First;
+                    continue;
+                }
+                bool completesShown=shown.Length>0 && nearby && Extends(cue.Text,shownSource);
+                if(!completesShown && now<readableUntil) return null;
+                waiting.RemoveFirst();
+                shown=translated;
+                shownSource=cue.Text;
+                shownSeen=cue.Seen;
+                readableUntil=now+Math.Min(3500,Math.Max(1150,500+shown.Length*30));
                 return shown;
             }
-            if(first==null && now>=clearAfter && shown.Length>0 && !Same(last,shownSource)) {
+            if(now>=readableUntil && shown.Length>0 && !Same(last,shownSource)) {
                 shown=""; return "";
             }
             return null;
         }
-        internal Task NextEvent(Task frame) {
+        internal Task NextEvent(Task frame,long now) {
             var first=waiting.First;
-            if(first!=null && first.Value.Job!=null && first.Value.Job.IsCompleted) return Task.FromResult(0);
+            if(now>=readableUntil && first!=null && first.Value.Job!=null && first.Value.Job.IsCompleted) return Task.FromResult(0);
             return active.Count==0?frame:Task.WhenAny(active.Values.Cast<Task>().Concat(new[]{frame}));
         }
-        internal void Pause() {waiting.Clear(); last=shown=shownSource=newestLine=uncertain=""; clearAfter=0; blanks=0;}
+        internal void Pause() {waiting.Clear(); last=shown=shownSource=uncertain=""; readableUntil=0; blankSince=-1;}
         internal void Finish() {try { Task.WaitAll(active.Values.ToArray()); } catch(AggregateException) { } }
     }
 }

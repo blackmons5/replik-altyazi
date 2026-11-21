@@ -199,7 +199,7 @@ namespace Replik {
                         if(current!=IntPtr.Zero && target.ActiveWindow()==current) {
                             var caption=dialogue.Tick(clock.ElapsedMilliseconds);
                             if(caption!=null) report("Çeviri etkin",caption);
-                            await dialogue.NextEvent(frame).ConfigureAwait(false);
+                            await dialogue.NextEvent(frame,clock.ElapsedMilliseconds).ConfigureAwait(false);
                         } else {
                             await frame.ConfigureAwait(false);
                         }

@@ -183,7 +183,10 @@ def serve_pack():
 if __name__ == "__main__":
     if sys.argv[1:] == ["--sync-pack"]:
         GamePack(Path(os.environ["LOCALAPPDATA"]) / "Replik" / "packs").sync()
-    elif sys.argv[1:] == ["--model"]:
-        serve_model()
-    elif sys.argv[1:] == ["--pack"]:
-        serve_pack()
+    elif sys.argv[1:] in (["--model"], ["--pack"]):
+        # The .NET Framework pipe can include a UTF-8 BOM on its first write.
+        sys.stdin.reconfigure(encoding="utf-8-sig")
+        if sys.argv[1] == "--model":
+            serve_model()
+        else:
+            serve_pack()

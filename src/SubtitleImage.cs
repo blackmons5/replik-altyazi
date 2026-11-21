@@ -8,6 +8,7 @@ namespace Replik {
     sealed class SubtitleImage {
         readonly int width,height;
         readonly byte[] gray;
+        readonly byte[] contrast;
         internal Size Size { get {return new Size(width,height);} }
 
         internal SubtitleImage(Bitmap source) {
@@ -46,24 +47,26 @@ namespace Replik {
                         gray[i]=(byte)((above+below+left+right+2)/4);
                 }
             }
-            IncreaseContrast();
+            contrast=IncreaseContrast();
         }
 
-        void IncreaseContrast() {
+        byte[] IncreaseContrast() {
             var histogram=new int[256];
             foreach(var pixel in gray) histogram[pixel]++;
             int black=0,white=255,count=histogram[black];
             while(black<255 && count<gray.Length*.05) count+=histogram[++black];
             count=histogram[white];
             while(white>0 && count<gray.Length*.006) count+=histogram[--white];
-            if(white-black<28) return;
+            if(white-black<28) return gray;
             var curve=new byte[256];
             for(int i=0;i<256;i++) curve[i]=(byte)Math.Max(0,Math.Min(255,(i-black)*255/(white-black)));
-            for(int i=0;i<gray.Length;i++) gray[i]=curve[gray[i]];
+            var result=new byte[gray.Length];
+            for(int i=0;i<gray.Length;i++) result[i]=curve[gray[i]];
+            return result;
         }
 
         internal Bitmap ToBitmap(bool adaptive) {
-            var values=adaptive?LocalThreshold():gray;
+            var values=adaptive?LocalThreshold():contrast;
             var bitmap=new Bitmap(width,height,PixelFormat.Format24bppRgb);
             try {
                 var data=bitmap.LockBits(new Rectangle(0,0,width,height),ImageLockMode.WriteOnly,PixelFormat.Format24bppRgb);
@@ -90,7 +93,7 @@ namespace Replik {
                 }
             }
             var output=new byte[gray.Length];
-            int radius=Math.Max(8,Math.Min(26,height/10));
+            int radius=Math.Max(12,Math.Min(30,height/8));
             for(int y=0;y<height;y++) {
                 int top=Math.Max(0,y-radius),bottom=Math.Min(height,y+radius+1);
                 for(int x=0;x<width;x++) {
@@ -98,7 +101,7 @@ namespace Replik {
                     int sum=integral[bottom*stride+right]-integral[bottom*stride+left]
                         -integral[top*stride+right]+integral[top*stride+left];
                     int mean=sum/((right-left)*(bottom-top));
-                    int threshold=Math.Min(247,Math.Max(96,mean+24));
+                    int threshold=Math.Min(247,Math.Max(132,mean+34));
                     int i=y*width+x;
                     // Bright outlined subtitles become dark glyphs on a white background.
                     output[i]=gray[i]>=threshold && gray[i]>mean+12?(byte)0:(byte)255;

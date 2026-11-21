@@ -24,7 +24,7 @@ namespace Replik {
             using(var client=new HttpClient(new FakeGemini())) {
                 g.Clear(Color.FromArgb(40,45,50)); g.DrawString("Open the door!",font,Brushes.White,480,610);
                 using(var sub=frame.Clone(Desktop.Pixels(new Rectangle(Point.Empty,frame.Size),Desktop.Bands[0]),frame.PixelFormat)) {
-                    float confidence; string read=reader.Read(sub,out confidence);
+                    float confidence; string read=reader.Read(sub,out confidence,true);
                     Check(read.IndexOf("Open the door",StringComparison.OrdinalIgnoreCase)>=0,"Bundled OCR in bottom preset: "+read);
                     var d=new Dialogue(s=>Gemini.Translate("test","gemini-test",s,CancellationToken.None,client));
                     d.Observe(read,confidence,0); d.Observe(read,confidence,75);
@@ -32,7 +32,7 @@ namespace Replik {
                     for(int i=0;result==null && i<80;i++) {Thread.Sleep(5);result=d.Tick(160+i*5);}
                     Check(result=="Kapıyı aç!","OCR to Gemini response to caption");
                     using(var blank=Graphics.FromImage(sub)) blank.Clear(Color.Black);
-                    Check(reader.Read(sub,out confidence)=="","Blank frame clears recognized text");
+                    Check(reader.Read(sub,out confidence,true)=="","Blank frame clears recognized text");
                 }
             }
         }
@@ -113,7 +113,7 @@ namespace Replik {
             d.Pause(); Check(d.Tick(5100)==null,"Pause clears display");
             var source=new Rectangle(0,0,1920,1080);
             Check(Desktop.Bands.Length==3 && Desktop.Bands[0].Top>Desktop.Bands[1].Top && Desktop.Bands[1].Top>Desktop.Bands[2].Top,"Three ordered preset bands");
-            Check(Desktop.Bands[0].Top>=.75f && Desktop.Bands[0].Bottom<=.97f,"Read bottom subtitles above edge controls");
+            Check(Desktop.Bands[0].Left>=.22f && Desktop.Bands[0].Top>=.79f && Desktop.Bands[0].Bottom<=.93f,"Focus the subtitle area between minimap and bottom edge");
             Check(Target.PlayerName("Veyra") && Target.PlayerName("NRVideo") && Target.PlayerName("RemotePlay") && !Target.PlayerName("chrome"),"Automatic player matching");
             var region=Desktop.Pixels(new Rectangle(-1920,0,1920,1080),new RectangleF(80f/1920,710f/1080,620f/1920,90f/1080));
             Check(region==new Rectangle(-1840,710,620,90),"Second monitor crop");

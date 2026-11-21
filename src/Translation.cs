@@ -36,22 +36,22 @@ namespace Replik {
             engine=new TesseractEngine(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"tessdata"),"eng",EngineMode.LstmOnly);
             engine.SetVariable("user_defined_dpi","180");
         }
-        internal string Read(Bitmap source,out float confidence) {
+        internal string Read(Bitmap source,out float confidence,bool preferBright=false) {
             var signature=Sample(source);
             if(signature==fingerprint && source.Size==lastSize && reused<2) {
                 reused++; confidence=lastConfidence; return lastText;
             }
             fingerprint=signature; lastSize=source.Size; reused=0;
-            lastText=Recognize(source,out lastConfidence); confidence=lastConfidence; return lastText;
+            lastText=Recognize(source,preferBright,out lastConfidence); confidence=lastConfidence; return lastText;
         }
-        string Recognize(Bitmap source,out float confidence) {
+        string Recognize(Bitmap source,bool preferBright,out float confidence) {
             var processed=new SubtitleImage(source);
             string text;
-            using(var image=processed.ToBitmap(false)) text=ReadText(image,out confidence);
+            using(var image=processed.ToBitmap(preferBright)) text=ReadText(image,out confidence);
             if(confidence>=.78f || fallbackClock.ElapsedMilliseconds<nextFallback) return text;
             float alternativeScore;
             string alternative;
-            using(var image=processed.ToBitmap(true)) alternative=ReadText(image,out alternativeScore);
+            using(var image=processed.ToBitmap(!preferBright)) alternative=ReadText(image,out alternativeScore);
             nextFallback=fallbackClock.ElapsedMilliseconds+180;
             if(alternativeScore<=confidence || alternative.Length==0) return text;
             confidence=alternativeScore;
@@ -196,7 +196,7 @@ namespace Replik {
                 var elapsed=System.Diagnostics.Stopwatch.StartNew();
                 using(var image=Desktop.Capture(area)) {
                     if(Desktop.GetForegroundWindow()!=window) return sample;
-                    sample.Text=reader.Read(image,out sample.Confidence);
+                    sample.Text=reader.Read(image,out sample.Confidence,fraction==Desktop.Bands[0]);
                 }
                 sample.Window=window; sample.Millis=elapsed.ElapsedMilliseconds;
                 return sample;

@@ -1,4 +1,8 @@
-Tam kurulum ve küçük güncelleme, oyuncunun bilgisayarında İngilizce Windows OCR motorunu kontrol eder. Eksikse Windows Update üzerinden indirip kurar. Bu işlem birkaç dakika sürebilir. Windows Update kullanılamıyorsa paketteki Tesseract ile çeviri çalışır.
+Gemini bağlantısı kesildiğinde, zamanında yanıt gelmediğinde veya yanıt kullanılamadığında Replik yerel OPUS-MT ile çeviriye devam eder. Hizmete geçici olarak ulaşılamadığında sonraki replikler yerel modelle çevrilir.
+
+Kısa bir İngilizce replik okunduktan sonra OCR metni geçici olarak kaybederse, hazır Türkçe yanıt 700 ms içinde gösterilebilir. Yeni bir İngilizce replik doğrulandığında eski yanıt elenir.
+
+Tam kurulum ve küçük güncelleme, oyuncunun bilgisayarında İngilizce Windows OCR motorunu kontrol eder. Eksikse Windows Update üzerinden indirip kurar. Windows Update kullanılamıyorsa paketteki Tesseract ile çeviri çalışır.
 
 GTA için **Alt** konumunda Tesseract kısa bir satırı okuyamadığında veya düşük güvenle okuduğunda, Replik büyütülmüş görüntüyü İngilizce Windows OCR ile de okur. İkinci okuyucu aynı altyazı konumu ve yazı biçimi filtrelerini kullanır.
 

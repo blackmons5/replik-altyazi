@@ -90,7 +90,38 @@ namespace Replik {
                 Check(current.provider=="OPUS-MT" && current.text.ToLowerInvariant().Contains("kap"),"Local model returned Turkish");
             }
         }
+        static void GeminiRecovery() {
+            int cloudCalls=0,localCalls=0;
+            var fallback=new GeminiFallback((line,token)=>{
+                cloudCalls++;
+                throw new HttpRequestException("Simulated connection failure");
+            },(line,token)=>{
+                localCalls++;
+                return Task.FromResult("Burada kal.");
+            });
+            Check(fallback.Translate("Stay here.",CancellationToken.None).GetAwaiter().GetResult()=="Burada kal.","A network failure uses local translation");
+            Check(fallback.Translate("Wait here.",CancellationToken.None).GetAwaiter().GetResult()=="Burada kal." && cloudCalls==1 && localCalls==2,
+                "The next cue is translated without another request to the unavailable provider");
+            var badReply=new GeminiFallback((line,token)=>Task.FromResult("????"),(line,token)=>Task.FromResult("Burada kal."));
+            Check(badReply.Translate("Stay here.",CancellationToken.None).GetAwaiter().GetResult()=="Burada kal.","A malformed cloud answer uses the local model");
+            var slowCloud=new GeminiFallback(async (line,token)=>{
+                await Task.Delay(Timeout.Infinite,token);
+                return "";
+            },(line,token)=>Task.FromResult("Burada kal."));
+            var result=slowCloud.Translate("Stay here.",CancellationToken.None);
+            Check(result.Wait(3000) && result.Result=="Burada kal.","A stalled cloud response has a bounded wait");
+            using(var cancelled=new CancellationTokenSource()) {
+                int before=localCalls;
+                cancelled.Cancel();
+                try {
+                    fallback.Translate("Expired cue.",cancelled.Token).GetAwaiter().GetResult();
+                    throw new Exception("Expired cue was translated");
+                } catch(OperationCanceledException) {}
+                Check(localCalls==before,"A replaced cue never starts a local fallback");
+            }
+        }
         static void Main(string[] args) {
+            GeminiRecovery();
             if(Array.IndexOf(args,"--windows-ocr")>=0) {
                 var windows=WindowsReader.OpenEnglish();
                 Check(windows!=null,"Installed English Windows OCR engine");
@@ -181,9 +212,17 @@ namespace Replik {
             dropout.Observe("",0,100);
             dropout.Tick(350);
             Check(slow.TrySetResult("Kapıyı aç!"),"A short OCR dropout keeps the pending translation");
-            Check(dropout.Tick(410)==null,"Do not display a completed result during an OCR gap");
+            Check(dropout.Tick(410)=="Kapıyı aç!","A short missed capture does not discard a completed first translation");
             dropout.Observe("Open the door!",.96f,490);
-            Check(dropout.Tick(490)=="Kapıyı aç!" && starts==1,"Show the translated cue on return without restarting the worker");
+            Check(dropout.Tick(490)==null && starts==1,"Returning OCR retains the caption without restarting the worker");
+            var lateReply=new TaskCompletionSource<string>();
+            var late=new Dialogue(s=>lateReply.Task);
+            late.Observe("Wait!",.96f,0,true);
+            late.Tick(0);
+            late.Observe("",0,100,true);
+            lateReply.SetResult("Bekle!");
+            Check(late.Tick(710)=="Bekle!" && late.Tick(959)==null && late.Tick(960)=="",
+                "A late reply gets a readable interval without surviving a long gap");
             var jitter=new Dialogue(s=>{recognized.Add(s); return Task.FromResult(s);});
             jitter.Observe("PHOTO STUDIO €] SELECT",.95f,0);
             Check(jitter.Tick(0)==null && recognized.Count==0,"Menu controls never reach the translator");

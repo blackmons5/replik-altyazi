@@ -11,7 +11,7 @@ Windows 10 (2004 ve üzeri) ve Windows 11 x64 için İngilizce oyun altyazılar�
 
 CouchSubs GTA 6 topluluk paketi kurulum sırasında resmî sunucudan alınır. Dosya özeti doğrulanır ve paket Windows kullanıcı hesabında saklanır. Replik oturum açılışında, son kontrolden bir gün geçtiyse daha yeni sürümü denetler. İnternet yokken indirilmiş paket kullanılabilir. Tam replik veya cümle parçaları eşleşirse Türkçesi yerelden gelir. Eşleşme yoksa seçtiğin motor çalışır. [Paket kaynağı](https://github.com/yorulmazsinan/couchsubs/tree/main/server/packs)
 
-API anahtarı oturum boyunca bellekte tutulur. Seçilen ekran bölgesi yerel olarak okunur. Yalnızca Gemini seçiliyken pakette bulunamayan metinler Google'a gönderilir. Tekrarlanan satırlar oturum içinde önbellekten gösterilir.
+API anahtarı oturum boyunca bellekte tutulur. Seçilen ekran bölgesi yerel olarak okunur. Yalnızca Gemini seçiliyken pakette bulunamayan metinler Google'a gönderilir. Gemini zamanında kullanılabilir bir sonuç vermezse Replik yerel OPUS-MT modelini dener. Tekrarlanan satırlar oturum içinde önbellekten gösterilir.
 
 ## Derleme
 

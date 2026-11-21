@@ -6,8 +6,9 @@ using System.Threading.Tasks;
 namespace Replik {
     // The capture loop owns cue state. Completed work is shown only for the still-current cue.
     sealed class Dialogue {
-        const int ReadingGap=200;
+        const int FirstTranslationGap=700;
         const int VisibleReadingGap=500;
+        const int MinimumLateCaption=250;
         const int ReturnWindow=1800;
         const int VariationWindow=850;
         sealed class Cue {
@@ -27,7 +28,7 @@ namespace Replik {
         Cue captured,earlierCapture,visibleCue;
         Job pending;
         string shown="",uncertain="";
-        long uncertainSeen,blankSince=-1;
+        long uncertainSeen,blankSince=-1,shownAt;
 
         public Dialogue(Func<string,Task<string>> translate) : this((text,token)=>translate(text)) {}
         public Dialogue(Func<string,CancellationToken,Task<string>> translate) { this.translate=translate; }
@@ -106,7 +107,10 @@ namespace Replik {
         }
         internal string Tick(long now) {
             CollectRetired();
-            int grace=shown.Length>0 && visibleCue==captured?VisibleReadingGap:ReadingGap;
+            bool hasCaption=shown.Length>0 && visibleCue==captured;
+            // Give an accepted reply a brief display window even if OCR has just missed its source.
+            long grace=hasCaption?Math.Max(VisibleReadingGap,shownAt-blankSince+MinimumLateCaption):FirstTranslationGap;
+            if(uncertain.Length>0 && !hasCaption) grace=0;
             var current=blankSince>=0 && now-blankSince>=grace?null:captured;
             // Hide immediately after a dropout, but keep work for the same cue
             // through a short OCR gap. A different confirmed cue always supersedes it.
@@ -115,7 +119,10 @@ namespace Replik {
             if(current==visibleCue) return null;
 
             string cached;
-            if(cache.TryGetValue(current.Text,out cached)) return Show(current,cached);
+            if(cache.TryGetValue(current.Text,out cached)) {
+                shownAt=now;
+                return Show(current,cached);
+            }
             if(pending==null) {
                 var cancellation=new CancellationTokenSource();
                 pending=new Job {Cue=current,Cancellation=cancellation,Translation=Translate(current,cancellation.Token)};
@@ -130,6 +137,7 @@ namespace Replik {
             if(translated.Length==0) return Show(current,"");
             if(cache.Count>=512) cache.Clear();
             cache[current.Text]=translated;
+            shownAt=now;
             return Show(current,translated);
         }
         internal Task NextEvent(Task frame) {

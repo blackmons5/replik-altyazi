@@ -191,7 +191,7 @@ namespace Replik {
                     if (!response.IsSuccessStatusCode) throw new InvalidOperationException("Gemini hizmeti yanıt veremedi ("+(int)response.StatusCode+").");
                     var data=json.Deserialize<Reply>(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
                     var candidate=data.candidates==null?null:data.candidates.FirstOrDefault();
-                    if (candidate==null || candidate.content==null || candidate.content.parts==null) throw new InvalidOperationException("Gemini bu satır için çeviri döndürmedi.");
+                    if (candidate==null || candidate.content==null || candidate.content.parts==null) return "";
                     return string.Join(" ",candidate.content.parts.Where(p=>!p.thought).Select(p=>p.text)).Trim();
                 }
             }
@@ -200,6 +200,44 @@ namespace Replik {
         public class Candidate { public Content content {get;set;} }
         public class Content { public Part[] parts {get;set;} }
         public class Part { public string text {get;set;} public bool thought {get;set;} }
+    }
+
+    sealed class GeminiFallback {
+        readonly Func<string,CancellationToken,Task<string>> cloud,offline;
+        readonly Stopwatch clock=Stopwatch.StartNew();
+        long resumeCloudAt;
+
+        internal GeminiFallback(Func<string,CancellationToken,Task<string>> cloud,Func<string,CancellationToken,Task<string>> offline) {
+            this.cloud=cloud;
+            this.offline=offline;
+        }
+
+        internal async Task<string> Translate(string line,CancellationToken token) {
+            if(clock.ElapsedMilliseconds>=Interlocked.Read(ref resumeCloudAt)) {
+                using(var deadline=CancellationTokenSource.CreateLinkedTokenSource(token)) {
+                    deadline.CancelAfter(850);
+                    try {
+                        var result=await cloud(line,deadline.Token).ConfigureAwait(false);
+                        token.ThrowIfCancellationRequested();
+                        result=SubtitleText.CleanTranslation(line,result);
+                        if(result.Length>0) return result;
+                    } catch(OperationCanceledException) {
+                        token.ThrowIfCancellationRequested();
+                        Interlocked.Exchange(ref resumeCloudAt,clock.ElapsedMilliseconds+5000);
+                    } catch(HttpRequestException) {
+                        token.ThrowIfCancellationRequested();
+                        Interlocked.Exchange(ref resumeCloudAt,clock.ElapsedMilliseconds+30000);
+                    } catch(InvalidOperationException) {
+                        token.ThrowIfCancellationRequested();
+                        Interlocked.Exchange(ref resumeCloudAt,clock.ElapsedMilliseconds+30000);
+                    } catch(ArgumentException) {
+                        // A malformed provider response is specific to this line.
+                    }
+                }
+            }
+            token.ThrowIfCancellationRequested();
+            return await offline(line,token).ConfigureAwait(false);
+        }
     }
 
     sealed class Session {
@@ -219,6 +257,8 @@ namespace Replik {
             using (var requests=CancellationTokenSource.CreateLinkedTokenSource(token))
             using (var worker=new LocalTranslator(requests.Token)) {
                 var clock=System.Diagnostics.Stopwatch.StartNew();
+                var fallback=new GeminiFallback((text,ct)=>Gemini.Translate(key,model,text,ct),
+                    async (text,ct)=>(await worker.Read(text,true,ct,false).ConfigureAwait(false)).text);
                 var dialogue=new Dialogue(async (text,cueToken)=>{
                     reading(text);
                     var began=clock.ElapsedMilliseconds;
@@ -239,9 +279,11 @@ namespace Replik {
                         if(!local && string.IsNullOrEmpty(translated)) {
                             linked.Token.ThrowIfCancellationRequested();
                             report("Gemini çeviriyor…",null);
-                            translated=await Gemini.Translate(key,model,text,linked.Token).ConfigureAwait(false);
+                            translated=await fallback.Translate(text,linked.Token).ConfigureAwait(false);
                         }
                         linked.Token.ThrowIfCancellationRequested();
+                        translated=SubtitleText.CleanTranslation(text,translated);
+                        if(translated.Length==0) report("Bu replik için geçerli Türkçe çeviri alınamadı.",null);
                         timings(-1,clock.ElapsedMilliseconds-began);
                         return translated;
                     }

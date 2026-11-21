@@ -5,11 +5,11 @@ Windows 10 (2004 ve üzeri) ve Windows 11 x64 için İngilizce oyun altyazılar�
 ## Kurulum ve kullanım
 
 1. Deponun **Releases** bölümünden **Replik-Kurulum-x64.exe** dosyasını indirip çalıştır. Kurulum İngilizce OCR modelini ve Tesseract motorunu içerir. Gerektiğinde Microsoft Visual C++ çalışma zamanını da kurar.
-2. Remote Play'i aç ve oyun içindeki İngilizce altyazıları etkinleştir. Replik'te oyun penceresini seçip **Altyazı alanını çiz** düğmesine bas. Açılan sabit görüntüde kutuyu içinden tutup taşı, kenar veya köşelerinden boyutlandır ya da kutunun dışından sürükleyerek yeni alan çiz. **Uygula** seçimi kaydeder. **Esc** önceki alanı korur. Aynı oturumda **Altyazı alanını düzenle** ile geri dönebilirsin.
-3. Kendi Gemini API anahtarını gir. Gerekirse hesabında kullanılabilen bir Gemini metin modelinin adını yaz. **Çeviriyi başlat** düğmesine bas.
-4. Oyun penceresini önde ve seçilen alanı açıkta tut. Türkçe satır, seçtiğin alanın hemen üstünde veya altında görünür. Replik'e dönünce okuma duraklar. Oturumu bitirmek için **Durdur** düğmesini kullan.
+2. Oyunda İngilizce altyazıları aç. Replik varsayılan olarak **Alt** bölgesini okur. Altyazı ekranın ortasındaysa **Orta**, üstündeyse **Üst** seç.
+3. Gemini API anahtarını gir, **Çeviriyi başlat** düğmesine bas ve oyuna dön. **Oyuna dönünce bağlan** seçeneği öndeki Veyra veya Remote Play penceresini izler. Oyuncu tanınmazsa **Yenile** ile görüntüyü gösteren pencereyi listeden seç.
+4. Son okunan İngilizce satır, Türkçe yanıt ve görüntü okuma / Gemini süreleri kontrol penceresinde görünür. Çevrilen satırlar konuşma sırasıyla gösterilir. Art arda gelen iki replik aynı kutuda görünebilir. Başka bir uygulamaya geçtiğinde otomatik mod duraklar.
 
-Hızlı konuşmalarda uygulama, OCR'ın yüksek güvenle okuduğu tek karelik replikleri de sıraya alır. Gemini istekleri aynı anda en fazla üç satır için çalışır. Yanıtlar konuşma sırasıyla, beyaz yazılı yarı saydam bir kutuda gösterilir. Yoğun diyalogda iki kısa replik birlikte görünebilir.
+OCR'ın kabul ettiği yeni satır doğrudan çeviri sırasına girer. En fazla üç Gemini isteği aynı anda çalışır. Sıradaki yanıt geldiğinde yeni ekran karesi beklenmeden gösterilir. Yerel önbellekte bulunan aynı satır için yeni istek yapılmaz.
 
 API anahtarı oturum boyunca bellekte tutulur. Seçilen ekran bölgesi yerel olarak okunur. Gemini'ye algılanan metin gönderilir. Tekrarlanan satırlar oturum içinde önbellekten gösterilir. Yeni satırlardaki gecikme OCR, ağ ve Gemini yanıt süresine bağlıdır. Bu ilk test sürümünün GTA 6 ve Remote Play üzerindeki uyumluluğu henüz doğrulanmadı.
 

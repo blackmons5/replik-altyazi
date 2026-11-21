@@ -10,15 +10,41 @@ namespace Replik {
     sealed class Target {
         public IntPtr Handle;
         public string Title;
+        uint lastProcess;
+        bool player;
+        internal static bool PlayerName(string name) {
+            return name.StartsWith("Veyra",StringComparison.OrdinalIgnoreCase)
+                || name.StartsWith("NRVideo",StringComparison.OrdinalIgnoreCase)
+                || string.Equals(name,"RemotePlay",StringComparison.OrdinalIgnoreCase);
+        }
+        internal IntPtr ActiveWindow() {
+            var front=Desktop.GetForegroundWindow();
+            if (front==IntPtr.Zero || Desktop.IsIconic(front)) return IntPtr.Zero;
+            if (front==Handle) return front;
+            uint pid=Desktop.ProcessId(front);
+            lock(this) {
+                if(lastProcess!=pid) {
+                    lastProcess=pid; player=false;
+                    try {using(var p=Process.GetProcessById((int)pid)) player=PlayerName(p.ProcessName);}
+                    catch(ArgumentException) {} catch(InvalidOperationException) {} catch(System.ComponentModel.Win32Exception) {}
+                }
+                bool allowed=player && (Handle==IntPtr.Zero || Desktop.ProcessId(Handle)==pid);
+                return allowed?front:IntPtr.Zero;
+            }
+        }
         public override string ToString() { return Title; }
     }
 
     static class Desktop {
+        internal static readonly RectangleF[] Bands={
+            new RectangleF(.10f,.72f,.80f,.26f),new RectangleF(.10f,.37f,.80f,.26f),new RectangleF(.10f,.02f,.80f,.26f)
+        };
         [StructLayout(LayoutKind.Sequential)] struct Rect { public int Left, Top, Right, Bottom; }
         delegate bool Visit(IntPtr window, IntPtr data);
         [DllImport("user32")] static extern bool EnumWindows(Visit callback, IntPtr data);
         [DllImport("user32", CharSet=CharSet.Unicode)] static extern int GetWindowText(IntPtr window, StringBuilder text, int count);
         [DllImport("user32")] static extern uint GetWindowThreadProcessId(IntPtr window, out uint process);
+        internal static uint ProcessId(IntPtr window) {uint process; GetWindowThreadProcessId(window,out process); return process;}
         [DllImport("user32")] static extern bool IsWindowVisible(IntPtr window);
         [DllImport("user32")] internal static extern bool IsWindow(IntPtr window);
         [DllImport("user32")] internal static extern bool IsIconic(IntPtr window);

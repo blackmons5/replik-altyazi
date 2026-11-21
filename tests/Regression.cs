@@ -2,38 +2,67 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Threading.Tasks;
+using System.Threading;
+using System.Net.Http;
+using System.Net;
 
 namespace Replik {
     static class Regression {
         static void Check(bool ok,string name) {if(!ok) throw new Exception(name);}
+        sealed class FakeGemini : HttpMessageHandler {
+            protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,CancellationToken token) {
+                var body=await request.Content.ReadAsStringAsync();
+                Check(body.IndexOf("Open the door",StringComparison.OrdinalIgnoreCase)>=0,"Recognized text in Gemini request");
+                return new HttpResponseMessage(HttpStatusCode.OK) { Content=new StringContent("{\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"Kapıyı aç!\"}]}}]}") };
+            }
+        }
+        static void TranslationPath() {
+            using(var reader=new Reader())
+            using(var frame=new Bitmap(1280,720))
+            using(var font=new Font("Segoe UI",32,GraphicsUnit.Pixel))
+            using(var g=Graphics.FromImage(frame))
+            using(var client=new HttpClient(new FakeGemini())) {
+                g.Clear(Color.FromArgb(40,45,50)); g.DrawString("Open the door!",font,Brushes.White,480,610);
+                using(var sub=frame.Clone(Desktop.Pixels(new Rectangle(Point.Empty,frame.Size),Desktop.Bands[0]),frame.PixelFormat)) {
+                    float confidence; string read=reader.Read(sub,out confidence);
+                    Check(read.IndexOf("Open the door",StringComparison.OrdinalIgnoreCase)>=0,"Bundled OCR in bottom preset: "+read);
+                    var d=new Dialogue(s=>Gemini.Translate("test","gemini-test",s,CancellationToken.None,client));
+                    d.Observe(read,confidence,0); d.Observe(read,confidence,75);
+                    string result=d.Tick(150);
+                    for(int i=0;result==null && i<80;i++) {Thread.Sleep(5);result=d.Tick(160+i*5);}
+                    Check(result=="Kapıyı aç!","OCR to Gemini response to caption");
+                    using(var blank=Graphics.FromImage(sub)) blank.Clear(Color.Black);
+                    Check(reader.Read(sub,out confidence)=="","Blank frame clears recognized text");
+                }
+            }
+        }
         static void Main() {
+            TranslationPath();
             var jobs=new Dictionary<string,TaskCompletionSource<string>>();
             var d=new Dialogue(s=>{var job=new TaskCompletionSource<string>();jobs.Add(s,job);return job.Task;});
             d.Observe("Get",.93f,0); d.Tick(0);
+            Check(jobs.ContainsKey("Get"),"Dispatch on the first OCR result");
             d.Observe("Get in the car!",.91f,35); d.Tick(80);
+            jobs["Get"].SetResult("Gel");
             d.Observe("Now!",.94f,110); d.Tick(185);
             d.Observe("Drive!",.96f,215); d.Tick(300);
-            Check(jobs.Count==3 && !jobs.ContainsKey("Get"),"Partial line coalescing");
+            Check(jobs.Count==4,"Full line supersedes dispatched partial line");
             jobs["Drive!"].SetResult("Sür!"); jobs["Now!"].SetResult("Hemen!");
             Check(d.Tick(500)==null,"Out of order network completion");
+            var blockedFrame=new TaskCompletionSource<int>();
+            var wake=d.NextEvent(blockedFrame.Task);
             jobs["Get in the car!"].SetResult("Arabaya bin!");
+            Check(wake.Wait(1000) && !blockedFrame.Task.IsCompleted,"Response wakes display before next OCR frame");
             Check(d.Tick(600)=="Arabaya bin!","Full first subtitle");
-            Check(d.Tick(1600)=="Hemen!","Single-frame middle subtitle");
-            Check(d.Tick(2600)=="Sür!","Single-frame final subtitle");
+            Check(d.Tick(601)=="Arabaya bin!"+Environment.NewLine+"Hemen!","Ready middle subtitle displays immediately");
+            Check(d.Tick(602)=="Hemen!"+Environment.NewLine+"Sür!","Ready final subtitle displays immediately");
             d.Observe("",0,2610); d.Observe("",0,2650);
             Check(d.Tick(4000)=="","Hide after readable interval");
             d.Observe("Now!",.94f,4020); Check(d.Tick(4100)=="Hemen!","Cache replay after blank");
             d.Pause(); Check(d.Tick(5100)==null,"Pause clears display");
             var source=new Rectangle(0,0,1920,1080);
-            var fit=Selection.Fit(source.Size,new Rectangle(0,0,750,550));
-            var p=Selection.Map(new Point(fit.Right,fit.Bottom),fit,source);
-            Check(p==new Point(1920,1080),"Preview letterboxing");
-            var box=Selection.Change(Grip.Draw,Rectangle.Empty,new Point(700,800),new Point(80,710),source.Size);
-            Check(box==new Rectangle(80,710,620,90),"Reverse drag");
-            var move=Selection.Change(Grip.Move,box,Point.Empty,new Point(-600,900),source.Size);
-            Check(move.Left==0 && move.Bottom==1080 && move.Size==box.Size,"Move and clamp");
-            var resized=Selection.Change(Grip.Bottom|Grip.Right,box,Point.Empty,new Point(-900,-200),source.Size);
-            Check(resized.Size==new Size(60,12),"Corner resize minimum");
+            Check(Desktop.Bands.Length==3 && Desktop.Bands[0].Top>Desktop.Bands[1].Top && Desktop.Bands[1].Top>Desktop.Bands[2].Top,"Three ordered preset bands");
+            Check(Target.PlayerName("Veyra") && Target.PlayerName("NRVideo") && Target.PlayerName("RemotePlay") && !Target.PlayerName("chrome"),"Automatic player matching");
             var region=Desktop.Pixels(new Rectangle(-1920,0,1920,1080),new RectangleF(80f/1920,710f/1080,620f/1920,90f/1080));
             Check(region==new Rectangle(-1840,710,620,90),"Second monitor crop");
             using(var shortLine=Caption.Render("Gel!",source.Size))

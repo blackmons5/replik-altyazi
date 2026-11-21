@@ -1,6 +1,6 @@
-Windows x64 kurulum dosyası İngilizce → Türkçe OPUS-MT modelini ve CPU çeviri motorunu içerir. Kurulumdan sonra OPUS-MT seçeneği API anahtarı veya internet bağlantısı olmadan çalışır. Gemini seçeneği kendi anahtarınızı kullanır.
+Replik, oyun menüsündeki fotoğraf ve seçim komutlarını filtreliyor. OCR aynı repliği ufak farklarla tekrar okursa üst üste iki çeviri göstermiyor. Güvenli okumalar hemen çevrilir. Belirsiz okumalar ikinci karede doğrulanır.
 
-**0.2.0 zaten kuruluysa** yalnızca Replik-Guncelleme-x64-r1.exe dosyasını indirip çalıştırabilirsiniz. İlk kurulum için Replik-Kurulum-x64.exe dosyasını kullanın.
+**0.2.1 kuruluysa** uygulamadaki **Güncelle** düğmesini kullanın. **0.2.0** kullanıcıları Replik-Guncelleme-x64-r1.exe dosyasıyla yükseltebilir. İlk kurulum için Replik-Kurulum-x64.exe dosyasını kullanın.
 
 Bu sürüm, açılışta ve açık kaldığı sürece altı saatte bir yeni kararlı sürümleri denetler. Yeni sürüm varsa pencerenin sağ üstünde Güncelle düğmesi görünür. Uyumlu küçük paket önceliklidir. İndirme tamamlanınca dosya doğrulanır ve kurulum sihirbazı açılır.
 

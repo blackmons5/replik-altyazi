@@ -56,9 +56,10 @@ namespace Replik {
                     iterator.Begin();
                     do {
                         float score=iterator.GetConfidence(PageIteratorLevel.TextLine)/100f;
-                        var line=iterator.GetText(PageIteratorLevel.TextLine);
-                        if(score<.55f || string.IsNullOrWhiteSpace(line) || !line.Any(char.IsLetter)) continue;
-                        lines.Add(Regex.Replace(line,@"\s+"," ").Trim());
+                        if(score<.55f) continue;
+                        var line=SubtitleText.Clean(iterator.GetText(PageIteratorLevel.TextLine));
+                        if(line.Length==0) continue;
+                        lines.Add(line);
                         confidence+=score;
                     } while(iterator.Next(PageIteratorLevel.TextLine));
                     if(lines.Count==0) return "";

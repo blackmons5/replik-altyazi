@@ -38,6 +38,28 @@ namespace Replik {
         }
         static void Main() {
             TranslationPath();
+            Check(SubtitleText.Clean("10 FOTO ?? RAF İNCELEME ?? SEÇ")=="","Photo controls and corrupt symbols");
+            Check(SubtitleText.Clean("TAKE PHOTO | SELECT")=="","Menu prompts");
+            Check(SubtitleText.Clean("Z Bruh, move now!")=="Bruh, move now!","A controller glyph before dialogue");
+            Check(SubtitleText.Clean("I Know where we're going.")=="I Know where we're going.","Preserve pronouns");
+            Check(SubtitleText.Clean("7 people came.")=="7 people came.","Preserve leading quantities");
+            Check(SubtitleText.Clean("Move!")=="Move!","Preserve a short spoken line");
+            Check(!SubtitleText.SameLine("You must turn left at gate 2 tonight.","You must turn left at gate 3 tonight.",true),"Keep changed numbers");
+            Check(!SubtitleText.SameLine("We can go back that way right now.","We can't go back that way right now.",true),"Keep changed negation");
+            var recognized=new List<string>();
+            var jitter=new Dialogue(s=>{recognized.Add(s); return Task.FromResult(s);});
+            jitter.Observe("TAKE PHOTO | SELECT",.95f,0);
+            Check(jitter.Tick(0)==null && recognized.Count==0,"Menu controls never reach the translator");
+            jitter.Observe("X Z ght 3 ??",.65f,20);
+            Check(jitter.Tick(20)==null && recognized.Count==0,"Reject a noisy frame");
+            jitter.Observe("Z Bruh, don't stand in the middle of the street.",.85f,45);
+            Check(jitter.Tick(45)=="Bruh, don't stand in the middle of the street.","Clean and dispatch a clear frame immediately");
+            jitter.Observe("7 Bruh, don't stand in the middie of the street!",.78f,100);
+            Check(jitter.Tick(100)==null && recognized.Count==1,"OCR variation does not translate twice");
+            jitter.Observe("We need to get out of here.",.66f,180);
+            Check(jitter.Tick(180)==null,"Uncertain read waits for confirmation");
+            jitter.Observe("We need to get out of here.",.68f,220);
+            Check(jitter.Tick(220).EndsWith("We need to get out of here.") && recognized.Count==2,"Confirm a readable line below the quick threshold");
             var patch=new Updates.Asset {name="Replik-Guncelleme-x64-r1.exe",size=100,digest="sha256:"+new string('1',64)};
             var full=new Updates.Asset {name=Updates.Full,size=200,digest=patch.digest};
             string prefix="https://github.com/blackmons5/replik-altyazi/releases/download/v0.3.0/";

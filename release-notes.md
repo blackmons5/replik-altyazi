@@ -1,6 +1,6 @@
-OCR aynı repliği kısa bir kesintiden veya araya giren tek bir okumadan sonra yeniden yakalarsa Replik o repliği ikinci kez kuyruğa almaz. Altyazı alanında veya çeviri yanıtında tekrarlanan aynı satır bir kez gösterilir.
+Replik her Türkçe çeviriyi ekrandaki İngilizce repliğe bağlar. OCR yeni bir repliği doğruladığında önceki çeviri kalkar. Yeni replik için hazır çeviri varsa hemen gösterilir. Eski bir repliğin geç gelen yanıtı ekrana basılmaz.
 
-Uzun bir aradan sonra gerçekten tekrarlanan replik yeniden gösterilebilir. Altyazılar sırayla ve metin uzunluğuna göre okunabilecek süreyle gösterilir.
+GTA 6 alt bölgesinde Tesseract önce dar altyazı alanını okur. Dar alan boşsa veya uzun bir satırın tamamını yakalayamadıysa daha geniş alanı da tarayabilir. Yol ve arka plan yazısı kontrolleri bu taramada da uygulanır.
 
 **0.2.1 ve üzeri kuruluysa** uygulamadaki **Güncelle** düğmesini kullanın. **0.2.0** kullanıcıları Replik-Guncelleme-x64-r1.exe dosyasıyla yükseltebilir. İlk kurulum için Replik-Kurulum-x64.exe dosyasını kullanın.
 

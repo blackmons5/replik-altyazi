@@ -60,11 +60,11 @@ namespace Replik {
             return string.Join(Environment.NewLine,rows);
         }
 
-        internal static bool IsClippedRead(string shorter,string longer) {
+        internal static bool IsClippedRead(string shorter,string longer,bool requireMajority=true) {
             if(shorter.Length>=longer.Length || shorter.Count(c=>c==' ')<2) return false;
             var part=Normalize(shorter);
             var whole=Normalize(longer);
-            if(part.Length*2<whole.Length || part==whole) return false;
+            if((requireMajority && part.Length*2<whole.Length) || part==whole) return false;
             return whole.StartsWith(part+" ",StringComparison.Ordinal) || whole.EndsWith(" "+part,StringComparison.Ordinal);
         }
 

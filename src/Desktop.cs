@@ -39,6 +39,7 @@ namespace Replik {
         internal static readonly RectangleF[] Bands={
             new RectangleF(.22f,.795f,.56f,.13f),new RectangleF(.10f,.37f,.80f,.26f),new RectangleF(.10f,.02f,.80f,.26f)
         };
+        internal static readonly RectangleF WideGtaBand=new RectangleF(.06f,.70f,.88f,.225f);
         [StructLayout(LayoutKind.Sequential)] struct Rect { public int Left, Top, Right, Bottom; }
         delegate bool Visit(IntPtr window, IntPtr data);
         [DllImport("user32")] static extern bool EnumWindows(Visit callback, IntPtr data);

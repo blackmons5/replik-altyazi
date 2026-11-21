@@ -122,7 +122,8 @@ namespace Replik {
             var h=target==null?IntPtr.Zero:target.ActiveWindow();
             if (h==IntPtr.Zero) {overlay.Hide(); return;}
             var bounds=Desktop.Bounds(h);
-            overlay.Place(caption,bounds,Desktop.Pixels(bounds,fraction));
+            var captureBand=fraction==Desktop.Bands[0]?Desktop.WideGtaBand:fraction;
+            overlay.Place(caption,bounds,Desktop.Pixels(bounds,captureBand));
         }
         async Task Toggle() {
             if (running!=null) { running.Cancel(); start.Enabled=false; return; }

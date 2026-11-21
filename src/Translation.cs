@@ -25,6 +25,12 @@ namespace Replik {
         bool lastGtaMode;
         readonly Stopwatch fallbackClock=Stopwatch.StartNew();
         long nextFallback;
+        long nextWideRead;
+        ulong wideFingerprint;
+        Size wideSize;
+        string wideText="";
+        float wideConfidence;
+        int wideReused;
         static ulong Sample(Bitmap image) {
             ulong hash=14695981039346656037UL;
             // Sparse samples detect static frames; periodically do a full read even on a match.
@@ -44,6 +50,27 @@ namespace Replik {
             }
             fingerprint=signature; lastSize=source.Size; lastGtaMode=gtaMode; reused=0;
             lastText=Recognize(source,gtaMode,out lastConfidence); confidence=lastConfidence; return lastText;
+        }
+        internal string ReadGta(Bitmap source,Rectangle tight,out float confidence) {
+            string text;
+            using(var crop=source.Clone(tight,System.Drawing.Imaging.PixelFormat.Format24bppRgb)) text=Read(crop,out confidence,true);
+            if(text.Length>0 && text.Length<32) return text;
+
+            var signature=Sample(source);
+            if(signature!=wideFingerprint || source.Size!=wideSize || wideReused>=2) {
+                if(fallbackClock.ElapsedMilliseconds<nextWideRead) return text;
+                var image=new SubtitleImage(source);
+                using(var mask=image.ToBitmap(true)) wideText=ReadText(mask,image,out wideConfidence);
+                nextWideRead=fallbackClock.ElapsedMilliseconds+160;
+                wideFingerprint=signature;
+                wideSize=source.Size;
+                wideReused=0;
+            } else wideReused++;
+            if(wideConfidence>=.85f && (text.Length==0 || SubtitleText.IsClippedRead(text,wideText,false))) {
+                confidence=wideConfidence;
+                return wideText;
+            }
+            return text;
         }
         string Recognize(Bitmap source,bool gtaMode,out float confidence) {
             var processed=new SubtitleImage(source);
@@ -161,17 +188,20 @@ namespace Replik {
             using (var requests=CancellationTokenSource.CreateLinkedTokenSource(token))
             using (var worker=new LocalTranslator(requests.Token)) {
                 var clock=System.Diagnostics.Stopwatch.StartNew();
-                var dialogue=new Dialogue(async text=>{
+                var dialogue=new Dialogue(async (text,cueToken)=>{
                     reading(text);
                     var began=clock.ElapsedMilliseconds;
-                    var result=await worker.Read(text,local,requests.Token).ConfigureAwait(false);
-                    var translated=result.text;
-                    if(string.IsNullOrEmpty(translated)) {
-                        report(result.pack+" • Gemini çeviriyor…",null);
-                        translated=await Gemini.Translate(key,model,text,requests.Token).ConfigureAwait(false);
-                    } else report(result.pack+" • "+result.provider,null);
-                    timings(-1,clock.ElapsedMilliseconds-began);
-                    return translated;
+                    using(var linked=CancellationTokenSource.CreateLinkedTokenSource(requests.Token,cueToken)) {
+                        var result=await worker.Read(text,local,linked.Token).ConfigureAwait(false);
+                        var translated=result.text;
+                        if(string.IsNullOrEmpty(translated)) {
+                            report(result.pack+" • Gemini çeviriyor…",null);
+                            translated=await Gemini.Translate(key,model,text,linked.Token).ConfigureAwait(false);
+                        }
+                        linked.Token.ThrowIfCancellationRequested();
+                        timings(-1,clock.ElapsedMilliseconds-began);
+                        return translated;
+                    }
                 });
                 long nextMeasure=0;
                 IntPtr current=IntPtr.Zero;
@@ -198,8 +228,8 @@ namespace Replik {
                         }
                         if(current!=IntPtr.Zero && target.ActiveWindow()==current) {
                             var caption=dialogue.Tick(clock.ElapsedMilliseconds);
-                            if(caption!=null) report("Çeviri etkin",caption);
-                            await dialogue.NextEvent(frame,clock.ElapsedMilliseconds).ConfigureAwait(false);
+                            if(caption!=null) report(caption.Length>0?"Çeviri etkin":"Altyazı bekleniyor…",caption);
+                            await dialogue.NextEvent(frame).ConfigureAwait(false);
                         } else {
                             await frame.ConfigureAwait(false);
                         }
@@ -224,12 +254,19 @@ namespace Replik {
                 var sample=new Sample();
                 var window=target.ActiveWindow();
                 if(window==IntPtr.Zero) return sample;
-                var area=Desktop.Pixels(Desktop.Bounds(window),fraction);
+                var bounds=Desktop.Bounds(window);
+                bool gtaMode=fraction==Desktop.Bands[0];
+                var tight=Desktop.Pixels(bounds,fraction);
+                var area=gtaMode?Desktop.Pixels(bounds,Desktop.WideGtaBand):tight;
+                if(gtaMode && !SystemInformationVisible(area)) area=tight;
                 if(area.Width<60 || area.Height<12 || !SystemInformationVisible(area)) return sample;
                 var elapsed=System.Diagnostics.Stopwatch.StartNew();
                 using(var image=Desktop.Capture(area)) {
                     if(Desktop.GetForegroundWindow()!=window) return sample;
-                    sample.Text=reader.Read(image,out sample.Confidence,fraction==Desktop.Bands[0]);
+                    if(gtaMode && area!=tight && area.Contains(tight)) {
+                        tight.Offset(-area.X,-area.Y);
+                        sample.Text=reader.ReadGta(image,tight,out sample.Confidence);
+                    } else sample.Text=reader.Read(image,out sample.Confidence,gtaMode);
                 }
                 sample.Window=window; sample.Millis=elapsed.ElapsedMilliseconds;
                 return sample;

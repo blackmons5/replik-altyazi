@@ -78,6 +78,25 @@ namespace Replik {
         static void Main() {
             TranslationPath();
             WorldText();
+            using(var reader=new Reader())
+            using(var screen=new Bitmap(625,318))
+            using(var pen=new Font("Segoe UI",16,GraphicsUnit.Pixel))
+            using(var g=Graphics.FromImage(screen)) {
+                g.Clear(Color.FromArgb(30,31,34));
+                const string first="Meet us on the other side of the bridge when the lights go out.";
+                const string second="We will wait for your signal.";
+                g.DrawString(first,pen,Brushes.White,(screen.Width-g.MeasureString(first,pen).Width)/2,234);
+                g.DrawString(second,pen,Brushes.White,(screen.Width-g.MeasureString(second,pen).Width)/2,257);
+                var bounds=new Rectangle(Point.Empty,screen.Size);
+                var wide=Desktop.Pixels(bounds,Desktop.WideGtaBand);
+                var tight=Desktop.Pixels(bounds,Desktop.Bands[0]);
+                tight.Offset(-wide.X,-wide.Y);
+                using(var crop=screen.Clone(wide,screen.PixelFormat)) {
+                    float score;
+                    var text=reader.ReadGta(crop,tight,out score);
+                    Check(text.Contains("other side of the bridge") && text.Contains("wait for your signal"),"Read both rows in a wider subtitle: "+text);
+                }
+            }
             using(var sample=new Bitmap(120,40))
             using(var painter=Graphics.FromImage(sample)) {
                 painter.Clear(Color.FromArgb(42,61,86));
@@ -118,13 +137,13 @@ namespace Replik {
             jitter.Observe("We need to get out of here.",.66f,180);
             Check(jitter.Tick(180)==null,"Uncertain read waits for confirmation");
             jitter.Observe("We need to get out of here.",.68f,220);
-            Check(jitter.Tick(220)==null && recognized.Count==2,"Confirm and translate while the previous line remains visible");
+            Check(jitter.Tick(220)=="We need to get out of here." && recognized.Count==2,"Confirmed subtitle replaces the previous line");
             jitter.Observe("",0,260);
             jitter.Observe("",0,280);
             jitter.Observe("We need to get out of here!",.95f,305);
             jitter.Observe("get out of here!",.94f,345);
             Check(jitter.Tick(345)==null && recognized.Count==2,"Ignore clipped reads and momentary gaps");
-            Check(jitter.Tick(1924)==null && jitter.Tick(1925)=="We need to get out of here.","Allow more reading time for longer subtitles");
+            Check(jitter.Tick(1925)==null,"Keep the subtitle while its source remains visible");
             var sameTurkish=new Dialogue(s=>Task.FromResult(s=="Wait."?"Bekle.":"bekle!"));
             sameTurkish.Observe("Wait.",.95f,0);
             Check(sameTurkish.Tick(0)=="Bekle.","Show the first translation");
@@ -145,8 +164,9 @@ namespace Replik {
             returns.Observe("",0,1200);
             Check(returns.Tick(1200)=="","A missing caption can clear normally");
             returns.Observe("Stay right here!",.97f,1450);
-            Check(returns.Tick(1450)==null && calls==1,"Do not reopen the same cue after an OCR dropout");
+            Check(returns.Tick(1450)=="Burada kal." && calls==1,"Restore the matching cached translation after an OCR dropout");
             returns.Observe("",0,1600);
+            Check(returns.Tick(1810)=="","Clear after the missing-caption grace period");
             returns.Observe("Stay right here.",.96f,3600);
             Check(returns.Tick(3600)=="Burada kal." && calls==1,"Genuine repeat after a longer break can use the cache");
             var seen=new List<string>();
@@ -154,8 +174,8 @@ namespace Replik {
             noisy.Observe("Stay right here.",.96f,0);
             noisy.Observe("Okay, then.",.96f,180);
             noisy.Observe("Stay right here!",.96f,300);
-            Check(noisy.Tick(300)=="Stay right here." && seen.Count==2,"No third queued request when OCR returns to the first line");
-            Check(noisy.Tick(1450)=="Okay, then." && noisy.Tick(3200)=="","No third appearance after the intervening cue");
+            Check(noisy.Tick(300)=="Stay right here." && seen.Count==1,"Only translate the latest on-screen line");
+            Check(noisy.Tick(1450)==null,"The discarded OCR cue never appears");
             var duplicateResult=new Dialogue(s=>Task.FromResult("Burada kal.\r\nBURADA KAL!"));
             duplicateResult.Observe("Stay right here.",.95f,0);
             Check(duplicateResult.Tick(0)=="Burada kal.","Drop repeated lines in a translation response");
@@ -170,28 +190,34 @@ namespace Replik {
             release.prerelease=true;
             Check(Updates.Select(release,new Version(0,2,1,0),"r1")==null,"Ignore prereleases");
             var jobs=new Dictionary<string,TaskCompletionSource<string>>();
-            var d=new Dialogue(s=>{var job=new TaskCompletionSource<string>();jobs.Add(s,job);return job.Task;});
-            d.Observe("Get",.93f,0); d.Tick(0);
-            Check(jobs.ContainsKey("Get"),"Dispatch on the first OCR result");
-            d.Observe("Get in the car!",.91f,35); d.Tick(80);
-            jobs["Get"].SetResult("Gel");
-            d.Observe("Now!",.94f,110); d.Tick(185);
-            d.Observe("Drive!",.96f,215); d.Tick(300);
-            Check(jobs.Count==4,"Full line supersedes dispatched partial line");
-            jobs["Drive!"].SetResult("Sür!"); jobs["Now!"].SetResult("Hemen!");
-            Check(d.Tick(500)==null,"Out of order network completion");
+            var tokens=new Dictionary<string,CancellationToken>();
+            var d=new Dialogue((s,token)=>{
+                if(s=="Go!") return Task.FromResult("Git!");
+                var job=new TaskCompletionSource<string>();
+                jobs.Add(s,job);
+                tokens.Add(s,token);
+                return job.Task;
+            });
+            d.Observe("Go!",.93f,0);
+            Check(d.Tick(0)=="Git!","Show a fast translation on the first confident read");
+            d.Observe("Now!",.94f,110);
+            Check(d.Tick(110)=="" && jobs.ContainsKey("Now!"),"Hide the previous cue immediately when the source changes");
+            d.Observe("Drive!",.96f,215);
+            Check(d.Tick(215)==null && tokens["Now!"].IsCancellationRequested,"Cancel the obsolete translation");
             var blockedFrame=new TaskCompletionSource<int>();
-            var wake=d.NextEvent(blockedFrame.Task,500);
-            jobs["Get in the car!"].SetResult("Arabaya bin!");
+            var wake=d.NextEvent(blockedFrame.Task);
+            jobs["Drive!"].SetResult("Sür!");
             Check(wake.Wait(1000) && !blockedFrame.Task.IsCompleted,"Response wakes display before next OCR frame");
-            Check(d.Tick(600)=="Arabaya bin!","Full first subtitle");
-            Check(d.Tick(601)==null && !d.NextEvent(blockedFrame.Task,601).IsCompleted,"Wait without busy looping when a translated cue is ready");
-            Check(d.Tick(1749)==null && d.Tick(1750)=="Hemen!","Give the first subtitle a full reading interval");
-            Check(d.Tick(2899)==null && d.Tick(2900)=="Sür!","Show the final line without stacking");
-            d.Observe("",0,3100); d.Observe("",0,3600);
-            Check(d.Tick(4050)=="","Hide after readable interval");
-            d.Observe("Now!",.94f,4100); Check(d.Tick(4150)=="Hemen!","Cache replay after blank");
-            d.Pause(); Check(d.Tick(5100)==null,"Pause clears display");
+            Check(d.Tick(230)=="Sür!","Show the current result without waiting for an old request");
+            jobs["Now!"].SetResult("Hemen!");
+            Check(d.Tick(250)==null && !d.NextEvent(blockedFrame.Task).IsCompleted,"Never display a late answer from a canceled cue");
+            d.Observe("",0,300);
+            Check(d.Tick(499)==null && d.Tick(500)=="","Ignore one missing frame, then clear once the source disappears");
+            d.Observe("Drive!",.94f,600);
+            Check(d.Tick(600)=="Sür!" && jobs.Count==2,"Reuse a matching known translation");
+            d.Pause();
+            Check(d.Tick(610)==null,"Pause clears display");
+            d.Finish();
             var source=new Rectangle(0,0,1920,1080);
             Check(Desktop.Bands.Length==3 && Desktop.Bands[0].Top>Desktop.Bands[1].Top && Desktop.Bands[1].Top>Desktop.Bands[2].Top,"Three ordered preset bands");
             Check(Desktop.Bands[0].Left>=.22f && Desktop.Bands[0].Top>=.79f && Desktop.Bands[0].Bottom<=.93f,"Focus the subtitle area between minimap and bottom edge");

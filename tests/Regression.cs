@@ -19,10 +19,10 @@ namespace Replik {
         static void TranslationPath() {
             using(var reader=new Reader())
             using(var frame=new Bitmap(1280,720))
-            using(var font=new Font("Segoe UI",32,GraphicsUnit.Pixel))
+            using(var font=new Font("Segoe UI",20,GraphicsUnit.Pixel))
             using(var g=Graphics.FromImage(frame))
             using(var client=new HttpClient(new FakeGemini())) {
-                g.Clear(Color.FromArgb(40,45,50)); g.DrawString("Open the door!",font,Brushes.White,480,610);
+                g.Clear(Color.FromArgb(40,45,50)); g.DrawString("Open the door!",font,Brushes.White,570,612);
                 using(var sub=frame.Clone(Desktop.Pixels(new Rectangle(Point.Empty,frame.Size),Desktop.Bands[0]),frame.PixelFormat)) {
                     float confidence; string read=reader.Read(sub,out confidence,true);
                     Check(read.IndexOf("Open the door",StringComparison.OrdinalIgnoreCase)>=0,"Bundled OCR in bottom preset: "+read);
@@ -36,8 +36,44 @@ namespace Replik {
                 }
             }
         }
+        static void WorldText() {
+            using(var reader=new Reader())
+            using(var crop=new Bitmap(850,115))
+            using(var regular=new Font("Segoe UI",18,GraphicsUnit.Pixel))
+            using(var paint=new Font("Arial",42,FontStyle.Bold,GraphicsUnit.Pixel))
+            using(var g=Graphics.FromImage(crop)) {
+                float score;
+                g.Clear(Color.FromArgb(35,39,44));
+                g.DrawString("WATER STORAGE",regular,Brushes.White,18,50);
+                Check(reader.Read(crop,out score,true)=="","Ignore off-center building letters");
+                g.Clear(Color.FromArgb(35,39,44));
+                g.DrawString("CAUTION",paint,Brushes.White,327,34);
+                Check(reader.Read(crop,out score,true)=="","Ignore wide painted road glyphs");
+                g.Clear(Color.FromArgb(35,39,44));
+                g.DrawString("BUS LANE",regular,Brushes.White,384,50);
+                Check(reader.Read(crop,out score,true)=="","Ignore a road marking at subtitle size");
+                g.Clear(Color.FromArgb(35,39,44));
+                g.DrawString("WATER STORAGE",regular,Brushes.White,362,50);
+                Check(reader.Read(crop,out score,true)=="","Ignore centered uppercase building signs");
+                g.Clear(Color.FromArgb(35,39,44));
+                g.TranslateTransform(350,57);
+                g.RotateTransform(8);
+                g.DrawString("Delivery entrance",regular,Brushes.White,0,0);
+                g.ResetTransform();
+                Check(reader.Read(crop,out score,true)=="","Ignore lettering tilted with the game world");
+                g.Clear(Color.FromArgb(35,39,44));
+                g.DrawString("No.",regular,Brushes.White,410,50);
+                Check(reader.Read(crop,out score,true)=="No.","Keep short dialogue");
+                g.Clear(Color.FromArgb(35,39,44));
+                g.DrawString("Stay here.",regular,Brushes.White,386,40);
+                g.DrawString("I'll be right back.",regular,Brushes.White,360,66);
+                var result=reader.Read(crop,out score,true);
+                Check(result.Contains("Stay here") && result.Contains("be right back"),"Keep a centered two-line subtitle: "+result);
+            }
+        }
         static void Main() {
             TranslationPath();
+            WorldText();
             using(var sample=new Bitmap(120,40))
             using(var painter=Graphics.FromImage(sample)) {
                 painter.Clear(Color.FromArgb(42,61,86));

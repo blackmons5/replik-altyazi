@@ -18,6 +18,18 @@ namespace Replik {
         static readonly string PromptPattern="(?:"+string.Join("|",Prompts.OrderByDescending(p=>p.Length).Select(Regex.Escape))+")";
         static readonly Regex MenuRow=new Regex("^"+PromptPattern+"(?: "+PromptPattern+")*$",RegexOptions.IgnoreCase|RegexOptions.CultureInvariant);
         static readonly Regex ButtonLabel=new Regex(@"\[[\p{L}\p{N}]{1,5}\]|(?<!\p{L})[\p{L}\p{N}]{1,2}(?=\]|\))");
+        static readonly HashSet<string> WorldLabels=new HashSet<string>(StringComparer.OrdinalIgnoreCase) {
+            "STOP","SLOW","YIELD","ONLY","BUS","BUS LANE","BUS ONLY","BIKE LANE","NO PARKING","KEEP CLEAR",
+            "STOP AHEAD","SCHOOL","SCHOOL ZONE","XING","LANE","LEFT TURN ONLY","RIGHT TURN ONLY","EXIT","ENTRANCE","PARKING",
+            "STAFF ONLY","PRIVATE PROPERTY","DO NOT ENTER","CAUTION"
+        };
+
+        internal static bool IsWorldLabel(string text) {
+            if(WorldLabels.Contains(text) || (text.Length==1 && !"AIai".Contains(text))) return true;
+            return text.Length>=2 && !text.Any(char.IsLower) && !text.EndsWith(".",StringComparison.Ordinal)
+                && !text.EndsWith("!",StringComparison.Ordinal) && !text.EndsWith("?",StringComparison.Ordinal)
+                && !string.Equals(text,"OK",StringComparison.Ordinal);
+        }
 
         internal static string Clean(string line) {
             if(string.IsNullOrWhiteSpace(line)) return "";

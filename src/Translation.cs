@@ -22,6 +22,7 @@ namespace Replik {
         string lastText="";
         float lastConfidence;
         int reused;
+        bool lastGtaMode;
         readonly Stopwatch fallbackClock=Stopwatch.StartNew();
         long nextFallback;
         static ulong Sample(Bitmap image) {
@@ -36,46 +37,78 @@ namespace Replik {
             engine=new TesseractEngine(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"tessdata"),"eng",EngineMode.LstmOnly);
             engine.SetVariable("user_defined_dpi","180");
         }
-        internal string Read(Bitmap source,out float confidence,bool preferBright=false) {
+        internal string Read(Bitmap source,out float confidence,bool gtaMode=false) {
             var signature=Sample(source);
-            if(signature==fingerprint && source.Size==lastSize && reused<2) {
+            if(signature==fingerprint && source.Size==lastSize && gtaMode==lastGtaMode && reused<2) {
                 reused++; confidence=lastConfidence; return lastText;
             }
-            fingerprint=signature; lastSize=source.Size; reused=0;
-            lastText=Recognize(source,preferBright,out lastConfidence); confidence=lastConfidence; return lastText;
+            fingerprint=signature; lastSize=source.Size; lastGtaMode=gtaMode; reused=0;
+            lastText=Recognize(source,gtaMode,out lastConfidence); confidence=lastConfidence; return lastText;
         }
-        string Recognize(Bitmap source,bool preferBright,out float confidence) {
+        string Recognize(Bitmap source,bool gtaMode,out float confidence) {
             var processed=new SubtitleImage(source);
             string text;
-            using(var image=processed.ToBitmap(preferBright)) text=ReadText(image,out confidence);
+            using(var image=processed.ToBitmap(gtaMode)) text=ReadText(image,gtaMode?processed:null,out confidence);
             if(confidence>=.78f || fallbackClock.ElapsedMilliseconds<nextFallback) return text;
             float alternativeScore;
             string alternative;
-            using(var image=processed.ToBitmap(!preferBright)) alternative=ReadText(image,out alternativeScore);
+            using(var image=processed.ToBitmap(!gtaMode)) alternative=ReadText(image,gtaMode?processed:null,out alternativeScore);
             nextFallback=fallbackClock.ElapsedMilliseconds+180;
             if(alternativeScore<=confidence || alternative.Length==0) return text;
             confidence=alternativeScore;
             return alternative;
         }
-        string ReadText(Bitmap image,out float confidence) {
-                using (var pix=PixConverter.ToPix(image))
-                using (var page=engine.Process(pix,PageSegMode.SingleBlock))
-                using (var iterator=page.GetIterator()) {
-                    var lines=new List<string>(); confidence=0;
-                    iterator.Begin();
-                    do {
-                        float score=iterator.GetConfidence(PageIteratorLevel.TextLine)/100f;
-                        if(score<.55f) continue;
-                        var line=SubtitleText.Clean(iterator.GetText(PageIteratorLevel.TextLine));
-                        if(line.Length==0) continue;
-                        lines.Add(line);
-                        confidence+=score;
-                    } while(iterator.Next(PageIteratorLevel.TextLine));
-                    if(lines.Count==0) return "";
-                    confidence/=lines.Count;
-                    string text=string.Join(" ",lines);
-                    return text.Length<=550?text:"";
-                }
+        sealed class Row {
+            internal Rectangle Bounds;
+            internal string Text;
+            internal float Confidence;
+        }
+        static bool IsGtaRow(SubtitleImage image,ResultIterator iterator,string line,out Rectangle box) {
+            const PageIteratorLevel level=PageIteratorLevel.TextLine;
+            box=Rectangle.Empty;
+            Rect bounds,baseline;
+            if(SubtitleText.IsWorldLabel(line) || !iterator.TryGetBoundingBox(level,out bounds) ||
+                !iterator.TryGetBaseline(level,out baseline)) return false;
+            box=new Rectangle(bounds.X1,bounds.Y1,bounds.Width,bounds.Height);
+            double centerX=(box.Left+box.Width*.5)/image.Size.Width;
+            double centerY=(box.Top+box.Height*.5)/image.Size.Height;
+            double height=(double)box.Height/image.Size.Height;
+            return centerX>=.36 && centerX<=.64 && centerY>=.12 && centerY<=.87 &&
+                height>=.065 && height<=.29 &&
+                Math.Abs(baseline.Height)<=Math.Max(2,baseline.Width*.018) && image.HasSubtitleStrokes(box);
+        }
+        static IEnumerable<Row> SubtitleRows(List<Row> rows,int height) {
+            var main=rows.OrderBy(r=>Math.Abs(r.Bounds.Top+r.Bounds.Height*.5-height*.53)/height-.12*r.Confidence).First();
+            var neighbor=rows.Where(r=>r!=main &&
+                Math.Abs(r.Bounds.Height-main.Bounds.Height)<=Math.Max(3,main.Bounds.Height*.37) &&
+                Math.Abs(r.Bounds.Top+r.Bounds.Height*.5-main.Bounds.Top-main.Bounds.Height*.5)<=main.Bounds.Height*1.85)
+                .OrderBy(r=>Math.Abs(r.Bounds.Top-main.Bounds.Top)).FirstOrDefault();
+            if(neighbor==null) return new[]{main};
+            return new[]{main,neighbor}.OrderBy(r=>r.Bounds.Top);
+        }
+        string ReadText(Bitmap image,SubtitleImage gta,out float confidence) {
+            using (var pix=PixConverter.ToPix(image))
+            using (var page=engine.Process(pix,PageSegMode.SingleBlock))
+            using (var iterator=page.GetIterator()) {
+                var found=new List<Row>();
+                confidence=0;
+                iterator.Begin();
+                do {
+                    float score=iterator.GetConfidence(PageIteratorLevel.TextLine)/100f;
+                    if(score<.55f) continue;
+                    var line=SubtitleText.Clean(iterator.GetText(PageIteratorLevel.TextLine));
+                    if(line.Length==0) continue;
+                    var box=Rectangle.Empty;
+                    if(gta!=null && !IsGtaRow(gta,iterator,line,out box)) continue;
+                    found.Add(new Row {Bounds=box,Text=line,Confidence=score});
+                } while(iterator.Next(PageIteratorLevel.TextLine));
+                if(found.Count==0) return "";
+                var rows=gta==null?found.ToArray():SubtitleRows(found,image.Height).ToArray();
+                var text=string.Join(" ",rows.Select(r=>r.Text));
+                if(text.Length>550) return "";
+                confidence=rows.Average(r=>r.Confidence);
+                return text;
+            }
         }
         public void Dispose() { engine.Dispose(); }
     }

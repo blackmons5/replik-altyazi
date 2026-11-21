@@ -9,6 +9,7 @@ namespace Replik {
         readonly int width,height;
         readonly byte[] gray;
         readonly byte[] contrast;
+        byte[] brightMask;
         internal Size Size { get {return new Size(width,height);} }
 
         internal SubtitleImage(Bitmap source) {
@@ -66,7 +67,7 @@ namespace Replik {
         }
 
         internal Bitmap ToBitmap(bool adaptive) {
-            var values=adaptive?LocalThreshold():contrast;
+            var values=adaptive?BrightMask():contrast;
             var bitmap=new Bitmap(width,height,PixelFormat.Format24bppRgb);
             try {
                 var data=bitmap.LockBits(new Rectangle(0,0,width,height),ImageLockMode.WriteOnly,PixelFormat.Format24bppRgb);
@@ -80,6 +81,29 @@ namespace Replik {
                 } finally {bitmap.UnlockBits(data);}
                 return bitmap;
             } catch {bitmap.Dispose(); throw;}
+        }
+
+        byte[] BrightMask() {
+            if(brightMask==null) brightMask=LocalThreshold();
+            return brightMask;
+        }
+
+        internal bool HasSubtitleStrokes(Rectangle bounds) {
+            var mask=BrightMask();
+            bounds=Rectangle.Intersect(bounds,new Rectangle(Point.Empty,Size));
+            int ink=0,thick=0,radius=Math.Max(1,(int)Math.Ceiling(bounds.Height*.08));
+            for(int y=bounds.Top;y<bounds.Bottom;y++) {
+                for(int x=bounds.Left;x<bounds.Right;x++) {
+                    int i=y*width+x;
+                    if(mask[i]!=0) continue;
+                    ink++;
+                    if(x-radius>=bounds.Left && x+radius<bounds.Right && y-radius>=bounds.Top && y+radius<bounds.Bottom &&
+                        mask[i-radius]==0 && mask[i+radius]==0 && mask[i-radius*width]==0 && mask[i+radius*width]==0)
+                        thick++;
+                }
+            }
+            int size=bounds.Width*bounds.Height;
+            return size>0 && ink>=size*.055 && ink<=size*.57 && thick<=ink*.16;
         }
 
         byte[] LocalThreshold() {

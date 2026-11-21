@@ -8,23 +8,24 @@ namespace Replik {
         static readonly Regex Space=new Regex(@"\s+");
         static readonly Regex LeadingControl=new Regex(@"^(?:(?:\[[A-Z0-9]{1,5}\]|[B-HJ-Z0-9])\s+){1,3}(?=[A-Z][a-z])");
         static readonly Regex StraySymbols=new Regex(@"(?<!\S)(?:[?]{2,}|[=|<>@#]{2,})(?!\S)");
-        static readonly Regex PromptSeparator=new Regex(@"\s+[·|/]\s+");
         static readonly Regex Word=new Regex(@"[\p{L}\p{N}]+");
         static readonly Regex Significant=new Regex(@"\b(?:\w*\d+\w*|no|not|never|none|without|cannot|cant|dont|doesnt|didnt|isnt|arent|wasnt|werent|wont|wouldnt|shouldnt|couldnt)\b");
         static readonly HashSet<string> Prompts=new HashSet<string>(StringComparer.OrdinalIgnoreCase) {
-            "PHOTO","PHOTOS","FOTO","PHOTO MODE","TAKE PHOTO","CAMERA ROLL","VIEW PHOTO","SELECT","EXAMINE","INSPECT",
+            "PHOTO","PHOTOS","FOTO","PHOTO MODE","PHOTO STUDIO","TAKE PHOTO","CAMERA ROLL","VIEW PHOTO","SELECT","EXAMINE","INSPECT",
             "BACK","ZOOM","ROTATE","CANCEL","NEXT","PREVIOUS","CLOSE","OPEN","SIT","TURN ON","TURN OFF","TAKE AMMO PACK",
             "SEÇ","İNCELEME","GERİ"
         };
+        static readonly string PromptPattern="(?:"+string.Join("|",Prompts.OrderByDescending(p=>p.Length).Select(Regex.Escape))+")";
+        static readonly Regex MenuRow=new Regex("^"+PromptPattern+"(?: "+PromptPattern+")*$",RegexOptions.IgnoreCase|RegexOptions.CultureInvariant);
+        static readonly Regex ButtonLabel=new Regex(@"\[[\p{L}\p{N}]{1,5}\]|(?<!\p{L})[\p{L}\p{N}]{1,2}(?=\]|\))");
 
         internal static string Clean(string line) {
             if(string.IsNullOrWhiteSpace(line)) return "";
             var text=Space.Replace(line," ").Trim();
             if(StraySymbols.IsMatch(text)) return "";
             text=LeadingControl.Replace(text,"");
-            var command=text.Trim(' ','[',']','(',')',':');
-            if(!command.Any(char.IsLower) &&
-                PromptSeparator.Split(command).All(Prompts.Contains)) return "";
+            var command=string.Join(" ",Word.Matches(ButtonLabel.Replace(text," ")).Cast<Match>().Select(m=>m.Value));
+            if(!text.Any(char.IsLower) && MenuRow.IsMatch(command) && !text.EndsWith("!",StringComparison.Ordinal)) return "";
             // A row of button labels and counters often has plenty of OCR letters but very few words.
             var words=Word.Matches(text).Cast<Match>().Select(m=>m.Value).ToArray();
             int noise=words.Count(w=>(w.Length==1 && !"aAiI".Contains(w)) || w.All(char.IsDigit));

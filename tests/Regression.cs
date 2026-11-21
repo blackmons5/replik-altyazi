@@ -40,6 +40,9 @@ namespace Replik {
             TranslationPath();
             Check(SubtitleText.Clean("10 FOTO ?? RAF İNCELEME ?? SEÇ")=="","Photo controls and corrupt symbols");
             Check(SubtitleText.Clean("TAKE PHOTO | SELECT")=="","Menu prompts");
+            Check(SubtitleText.Clean("PHOTO STUDIO €] SELECT")=="","Photo Studio controls from the reported frame");
+            Check(SubtitleText.Clean("PHOTO STUDIO E] SELECT")=="","A letter misread from a button in Photo Studio");
+            Check(SubtitleText.Clean("SIT!")=="SIT!","All-caps dialogue with sentence punctuation");
             Check(SubtitleText.Clean("Z Bruh, move now!")=="Bruh, move now!","A controller glyph before dialogue");
             Check(SubtitleText.Clean("I Know where we're going.")=="I Know where we're going.","Preserve pronouns");
             Check(SubtitleText.Clean("7 people came.")=="7 people came.","Preserve leading quantities");
@@ -48,7 +51,7 @@ namespace Replik {
             Check(!SubtitleText.SameLine("We can go back that way right now.","We can't go back that way right now.",true),"Keep changed negation");
             var recognized=new List<string>();
             var jitter=new Dialogue(s=>{recognized.Add(s); return Task.FromResult(s);});
-            jitter.Observe("TAKE PHOTO | SELECT",.95f,0);
+            jitter.Observe("PHOTO STUDIO €] SELECT",.95f,0);
             Check(jitter.Tick(0)==null && recognized.Count==0,"Menu controls never reach the translator");
             jitter.Observe("X Z ght 3 ??",.65f,20);
             Check(jitter.Tick(20)==null && recognized.Count==0,"Reject a noisy frame");

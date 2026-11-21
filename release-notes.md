@@ -1,6 +1,6 @@
-İngilizce satır okunurken Türkçe alanının boş kalması için düzeltme. Hazır paket ve yerel model, 0.2.8’de kullanılan tek çeviri süreciyle çalışır. Windows metin kodlamasının ilk isteği bozmasını önlemek için uygulama ve çeviri motoru bayt üzerinden haberleşir.
+OCR aynı İngilizce repliği kısa süre okuyamadığında, ekrandaki Türkçe altyazı yarım saniyeye kadar görünür kalır. Yeni bir replik doğrulandığı anda önceki altyazı kalkar.
 
-OCR aynı repliği kısa süreliğine kaybederse Replik sürmekte olan çeviriyi saklar. İngilizce satır geri geldiğinde hazır Türkçe gösterilir. Başka bir replik algılanırsa önceki yanıt elenir.
+GTA alt bölgesinde tek karede beliren, okuması belirsiz ve noktalamasız bir parça, mevcut repliğin yerini almadan önce ikinci okumada doğrulanır. Harflere karışmış yoğun simge dizileri hem okunan İngilizcede hem de Türkçe yanıtta süzülür.
 
 **0.2.1 ve üzeri kuruluysa** uygulamadaki **Güncelle** düğmesini kullanın. **0.2.0** kullanıcıları Replik-Guncelleme-x64-r1.exe dosyasıyla yükseltebilir. İlk kurulum için Replik-Kurulum-x64.exe dosyasını kullanın.
 

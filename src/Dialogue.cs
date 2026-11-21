@@ -7,6 +7,7 @@ namespace Replik {
     // The capture loop owns cue state. Completed work is shown only for the still-current cue.
     sealed class Dialogue {
         const int ReadingGap=200;
+        const int VisibleReadingGap=500;
         const int ReturnWindow=1800;
         const int VariationWindow=850;
         sealed class Cue {
@@ -61,8 +62,12 @@ namespace Replik {
                 return;
             }
             // Confirm less certain changes on a second frame without delaying clear subtitles.
-            bool completeGtaRow=gtaRow && confidence>=.76f && ".!?…".IndexOf(text[text.Length-1])>=0;
-            if(confidence<.85f && !completeGtaRow && (now-uncertainSeen>350 || !SubtitleText.SameLine(text,uncertain,true,true))) {
+            bool hasSentenceEnd=".!?…".IndexOf(text[text.Length-1])>=0;
+            bool completeGtaRow=gtaRow && confidence>=.76f && hasSentenceEnd;
+            bool ambiguousFragment=gtaRow && shown.Length>0 && confidence<.93f && !hasSentenceEnd;
+            if(((confidence<.85f && !completeGtaRow) || ambiguousFragment) &&
+                (now-uncertainSeen>350 || !SubtitleText.SameLine(text,uncertain,true,true))) {
+                if(blankSince<0) blankSince=now;
                 uncertain=text; uncertainSeen=now;
                 return;
             }
@@ -101,7 +106,8 @@ namespace Replik {
         }
         internal string Tick(long now) {
             CollectRetired();
-            var current=blankSince>=0 && now-blankSince>=ReadingGap?null:captured;
+            int grace=shown.Length>0 && visibleCue==captured?VisibleReadingGap:ReadingGap;
+            var current=blankSince>=0 && now-blankSince>=grace?null:captured;
             // Hide immediately after a dropout, but keep work for the same cue
             // through a short OCR gap. A different confirmed cue always supersedes it.
             if(pending!=null && (pending.Cue!=captured || (current==null && now-blankSince>=ReturnWindow))) RetirePending();

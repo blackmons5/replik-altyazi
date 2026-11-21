@@ -10,6 +10,7 @@ namespace Replik {
         static readonly Regex QuestionRun=new Regex(@"\?{2,}");
         static readonly Regex LeadingControl=new Regex(@"^(?:(?:\[[A-Z0-9]{1,5}\]|[B-HJ-Z0-9])\s+){1,3}(?=[A-Z][a-z])");
         static readonly Regex StraySymbols=new Regex(@"(?<!\S)(?:[?]{2,}|[=|<>@#]{2,})(?!\S)");
+        static readonly Regex SymbolNoise=new Regex(@"[=|<>@#{}\\^~_]");
         static readonly Regex Word=new Regex(@"[\p{L}\p{N}]+");
         static readonly Regex Significant=new Regex(@"\b(?:\w*\d+\w*|no|not|never|none|without|cannot|cant|dont|doesnt|didnt|isnt|arent|wasnt|werent|wont|wouldnt|shouldnt|couldnt)\b");
         static readonly HashSet<string> Prompts=new HashSet<string>(StringComparer.OrdinalIgnoreCase) {
@@ -43,9 +44,15 @@ namespace Replik {
             if(!text.Any(char.IsLower) && MenuRow.IsMatch(command) && !text.EndsWith("!",StringComparison.Ordinal)) return "";
             // A row of button labels and counters often has plenty of OCR letters but very few words.
             var words=Word.Matches(text).Cast<Match>().Select(m=>m.Value).ToArray();
+            if(HasSymbolNoise(text,words.Length)) return "";
             int noise=words.Count(w=>(w.Length==1 && !"aAiI".Contains(w)) || w.All(char.IsDigit));
             if(!text.Any(char.IsLetter) || (words.Length>=3 && noise*2>=words.Length)) return "";
             return text;
+        }
+
+        static bool HasSymbolNoise(string text,int words) {
+            int symbols=SymbolNoise.Matches(text).Count;
+            return symbols>=3 && symbols>=words;
         }
 
         static string CleanQuestions(string text) {
@@ -74,6 +81,7 @@ namespace Replik {
             var candidate=RemoveRepeatedRows(CleanQuestions(output));
             if(string.IsNullOrWhiteSpace(candidate) || !candidate.Any(char.IsLetterOrDigit) ||
                 candidate.Length>Math.Min(680,Math.Max(96,source.Length*3+30))) return "";
+            if(HasSymbolNoise(candidate,Word.Matches(candidate).Count)) return "";
             return candidate.Trim();
         }
 

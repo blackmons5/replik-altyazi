@@ -27,11 +27,20 @@ namespace Replik {
             "STAFF ONLY","PRIVATE PROPERTY","DO NOT ENTER","CAUTION"
         };
 
+        internal static bool IsShortUtterance(string text) {
+            switch(text.TrimEnd('.','!','?','…').ToUpperInvariant()) {
+                case "YES": case "NO": case "OK": case "OKAY": case "GO": case "WAIT": case "RUN":
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
         internal static bool IsWorldLabel(string text) {
             if(WorldLabels.Contains(text) || (text.Length==1 && !"AIai".Contains(text))) return true;
             return text.Length>=2 && !text.Any(char.IsLower) && !text.EndsWith(".",StringComparison.Ordinal)
                 && !text.EndsWith("!",StringComparison.Ordinal) && !text.EndsWith("?",StringComparison.Ordinal)
-                && !string.Equals(text,"OK",StringComparison.Ordinal);
+                && !IsShortUtterance(text);
         }
 
         internal static string Clean(string line) {

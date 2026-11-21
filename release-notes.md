@@ -1,6 +1,10 @@
-Gemini bağlantısı kesildiğinde, zamanında yanıt gelmediğinde veya yanıt kullanılamadığında Replik yerel OPUS-MT ile çeviriye devam eder. Hizmete geçici olarak ulaşılamadığında sonraki replikler yerel modelle çevrilir.
+Replik varsayılan olarak yerel OPUS-MT ile çevirir. Model, oturum başlarken ilk replik için hazırlanır. Gemini isteğe bağlıdır. Gemini seçiliyken bağlantı kesilirse veya kullanılabilir bir yanıt zamanında gelmezse yerel model devreye girer.
+
+**Tanı günlüğünü aç** bağlantısı, pencere yakalama, OCR ve çeviri durumunu gösterir. Günlük bilgisayarda tutulur. İngilizce ve Türkçe altyazı metinleri, ekran görüntüleri ve API anahtarı günlüğe yazılmaz.
 
 Kısa bir İngilizce replik okunduktan sonra OCR metni geçici olarak kaybederse, hazır Türkçe yanıt 700 ms içinde gösterilebilir. Yeni bir İngilizce replik doğrulandığında eski yanıt elenir.
+
+GTA alt bölgesinde `Wait`, `Go` ve `No` gibi kısa replikler yeterince net okunduğunda noktalama olmadan da ilk karede çeviriye alınır.
 
 Tam kurulum ve küçük güncelleme, oyuncunun bilgisayarında İngilizce Windows OCR motorunu kontrol eder. Eksikse Windows Update üzerinden indirip kurar. Windows Update kullanılamıyorsa paketteki Tesseract ile çeviri çalışır.
 

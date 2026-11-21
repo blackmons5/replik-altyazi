@@ -9,9 +9,11 @@ Windows 10 (2004 ve üzeri) ve Windows 11 x64 için İngilizce oyun altyazılar�
 3. Çeviri motorunu seç. Varsayılan **OPUS-MT** CPU üzerinde çalışır. Model, Python ve çeviri kütüphaneleri EXE'ye dahildir. **Gemini** için kendi anahtarını gir. **Çeviriyi başlat** düğmesine bas ve oyuna dön. **Oyuna dönünce bağlan** seçeneği öndeki Veyra veya Remote Play penceresini izler. Oyuncu tanınmazsa **Yenile** ile görüntüyü gösteren pencereyi listeden seç.
 4. Son okunan İngilizce satır, Türkçe yanıt ve görüntü okuma / çeviri süreleri kontrol penceresinde görünür. Oyunda yeni bir replik algılandığında kutuda o repliğin çevirisi gösterilir. Önceki replik için geç gelen yanıt elenir. Başka bir uygulamaya geçtiğinde otomatik mod duraklar.
 
-CouchSubs GTA 6 topluluk paketi kurulum sırasında resmî sunucudan alınır. Dosya özeti doğrulanır ve paket Windows kullanıcı hesabında saklanır. Replik oturum açılışında, son kontrolden bir gün geçtiyse daha yeni sürümü denetler. İnternet yokken indirilmiş paket kullanılabilir. Tam replik veya cümle parçaları eşleşirse Türkçesi yerelden gelir. Eşleşme yoksa seçtiğin motor çalışır. [Paket kaynağı](https://github.com/yorulmazsinan/couchsubs/tree/main/server/packs)
+CouchSubs GTA 6 topluluk paketi kurulum sırasında resmî sunucudan alınır. Varsayılan OPUS-MT modunda paket, yerel modelden geçerli çeviri alınamayan satırlar için denenir. Gemini modunda paket eşleşmeleri yerelden gösterilir. [Paket kaynağı](https://github.com/yorulmazsinan/couchsubs/tree/main/server/packs)
 
 API anahtarı oturum boyunca bellekte tutulur. Seçilen ekran bölgesi yerel olarak okunur. Yalnızca Gemini seçiliyken pakette bulunamayan metinler Google'a gönderilir. Gemini zamanında kullanılabilir bir sonuç vermezse Replik yerel OPUS-MT modelini dener. Tekrarlanan satırlar oturum içinde önbellekten gösterilir.
+
+**Tanı günlüğünü aç** bağlantısı, yakalama, OCR ve çeviri durumunu bilgisayarda tutulan bir dosyada gösterir. Günlüğe altyazı metni, ekran görüntüsü veya API anahtarı yazılmaz.
 
 ## Derleme
 

@@ -133,10 +133,16 @@ class Opus:
         return self.target.decode(output[0].hypotheses[0]).strip()
 
 
-def serve():
+def serve(warm_model=False):
     pack = GamePack(Path(os.environ["LOCALAPPDATA"]) / "Replik" / "packs")
     threading.Thread(target=pack.sync, daemon=True).start()
     model = None
+    if warm_model:
+        try:
+            model = Opus()
+        except Exception:
+            # Keep the protocol and pack available. A local request can retry loading.
+            pass
     for line in sys.stdin.buffer:
         try:
             request = json.loads(line)
@@ -157,4 +163,4 @@ if __name__ == "__main__":
     if sys.argv[1:] == ["--sync-pack"]:
         GamePack(Path(os.environ["LOCALAPPDATA"]) / "Replik" / "packs").sync()
     else:
-        serve()
+        serve("--warm-model" in sys.argv[1:])

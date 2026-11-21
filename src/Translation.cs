@@ -223,12 +223,15 @@ namespace Replik {
                         if(result.Length>0) return result;
                     } catch(OperationCanceledException) {
                         token.ThrowIfCancellationRequested();
+                        DiagnosticsLog.Local.Write("translation.cloud.timeout");
                         Interlocked.Exchange(ref resumeCloudAt,clock.ElapsedMilliseconds+5000);
-                    } catch(HttpRequestException) {
+                    } catch(HttpRequestException ex) {
                         token.ThrowIfCancellationRequested();
+                        DiagnosticsLog.Local.Error("translation.cloud.error",ex);
                         Interlocked.Exchange(ref resumeCloudAt,clock.ElapsedMilliseconds+30000);
-                    } catch(InvalidOperationException) {
+                    } catch(InvalidOperationException ex) {
                         token.ThrowIfCancellationRequested();
+                        DiagnosticsLog.Local.Error("translation.cloud.error",ex);
                         Interlocked.Exchange(ref resumeCloudAt,clock.ElapsedMilliseconds+30000);
                     } catch(ArgumentException) {
                         // A malformed provider response is specific to this line.
@@ -236,6 +239,7 @@ namespace Replik {
                 }
             }
             token.ThrowIfCancellationRequested();
+            DiagnosticsLog.Local.Write("translation.fallback","provider=opus-mt");
             return await offline(line,token).ConfigureAwait(false);
         }
     }
@@ -253,6 +257,8 @@ namespace Replik {
             this.target=target; this.reading=reading; this.timings=timings; this.fraction=fraction; this.key=key; this.model=model; this.report=report;
         }
         public async Task Run(CancellationToken token) {
+            bool gtaMode=fraction==Desktop.Bands[0];
+            DiagnosticsLog.Local.Write("session.start","provider={0} preset={1}",local?"opus-mt":"gemini",gtaMode?"bottom":fraction==Desktop.Bands[1]?"middle":"top");
             using (var reader=new Reader())
             using (var requests=CancellationTokenSource.CreateLinkedTokenSource(token))
             using (var worker=new LocalTranslator(requests.Token)) {
@@ -265,16 +271,18 @@ namespace Replik {
                     using(var linked=CancellationTokenSource.CreateLinkedTokenSource(requests.Token,cueToken)) {
                         string translated="";
                         try {
-                            var result=await worker.Read(text,local,linked.Token).ConfigureAwait(false);
+                            // The default engine gets the first chance. The GTA pack can
+                            // recover a line if the model returns an unusable result.
+                            var result=await worker.Read(text,local,linked.Token,!local).ConfigureAwait(false);
                             translated=SubtitleText.CleanTranslation(text,result.text);
-                            if(translated.Length==0 && local && result.provider=="GTA 6 paketi") {
-                                result=await worker.Read(text,true,linked.Token,false).ConfigureAwait(false);
-                                translated=SubtitleText.CleanTranslation(text,result.text);
-                            }
                         } catch(IOException) {
                             if(local) throw;
-                        } catch(InvalidOperationException) {
-                            if(local) throw;
+                        } catch(InvalidOperationException ex) {
+                            DiagnosticsLog.Local.Error("translation.local.error",ex);
+                        }
+                        if(local && translated.Length==0) {
+                            var result=await worker.Read(text,false,linked.Token).ConfigureAwait(false);
+                            translated=SubtitleText.CleanTranslation(text,result.text);
                         }
                         if(!local && string.IsNullOrEmpty(translated)) {
                             linked.Token.ThrowIfCancellationRequested();
@@ -283,6 +291,7 @@ namespace Replik {
                         }
                         linked.Token.ThrowIfCancellationRequested();
                         translated=SubtitleText.CleanTranslation(text,translated);
+                        DiagnosticsLog.Local.Write("translation.result","has_output={0} elapsed_ms={1}",translated.Length>0,clock.ElapsedMilliseconds-began);
                         if(translated.Length==0) report("Bu replik için geçerli Türkçe çeviri alınamadı.",null);
                         timings(-1,clock.ElapsedMilliseconds-began);
                         return translated;
@@ -301,19 +310,28 @@ namespace Replik {
                             var visible=active?sample.Window:IntPtr.Zero;
                             if(first || current!=visible) {
                                 dialogue.Pause();
+                                DiagnosticsLog.Local.Write("capture.state","active={0}",active);
                                 report(active?"Oyun görüntüsü okunuyor. Altyazı bekleniyor…":"Oyuna dön. Veyra tanınmazsa listeden oyun görüntüsünün penceresini seç.","");
                                 first=false; current=visible;
                             }
                             if(active) {
-                                if(clock.ElapsedMilliseconds>=nextMeasure) {timings(sample.Millis,-1); nextMeasure=clock.ElapsedMilliseconds+500;}
-                                dialogue.Observe(sample.Text,sample.Confidence,clock.ElapsedMilliseconds,fraction==Desktop.Bands[0]);
+                                if(clock.ElapsedMilliseconds>=nextMeasure) {
+                                    timings(sample.Millis,-1);
+                                    DiagnosticsLog.Local.Write("ocr.sample","has_text={0} confidence={1:F2} elapsed_ms={2}",
+                                        !string.IsNullOrEmpty(sample.Text),sample.Confidence,sample.Millis);
+                                    nextMeasure=clock.ElapsedMilliseconds+1000;
+                                }
+                                dialogue.Observe(sample.Text,sample.Confidence,clock.ElapsedMilliseconds,gtaMode);
                             }
                             // Pace only the next screen sample. Completed translations wake this loop independently.
                             frame=ReadFrame(reader,active?(int)Math.Max(0,33-sample.Millis):130,requests.Token);
                         }
                         if(current!=IntPtr.Zero && target.ActiveWindow()==current) {
                             var caption=dialogue.Tick(clock.ElapsedMilliseconds);
-                            if(caption!=null) report(caption.Length>0?"Çeviri etkin":"Altyazı bekleniyor…",caption);
+                            if(caption!=null) {
+                                DiagnosticsLog.Local.Write("caption.state","visible={0}",caption.Length>0);
+                                report(caption.Length>0?"Çeviri etkin":"Altyazı bekleniyor…",caption);
+                            }
                             await dialogue.NextEvent(frame).ConfigureAwait(false);
                         } else {
                             await frame.ConfigureAwait(false);

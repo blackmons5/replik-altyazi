@@ -16,6 +16,7 @@ namespace Replik {
                 Environment.ExitCode=WindowsReader.OpenEnglish()==null?1:0;
                 return;
             }
+            DiagnosticsLog.Local.Startup();
             Desktop.SetProcessDpiAwarenessContext(new IntPtr(-4));
             Environment.SetEnvironmentVariable("OMP_THREAD_LIMIT","1");
             ServicePointManager.SecurityProtocol=SecurityProtocolType.Tls12;
@@ -50,7 +51,7 @@ namespace Replik {
         public Dashboard() {
             Text="Replik • Oyun altyazısı"; Font=new Font("Segoe UI",10);
             AutoScaleMode=AutoScaleMode.Dpi; AutoScaleDimensions=new SizeF(96,96);
-            StartPosition=FormStartPosition.CenterScreen; ClientSize=new Size(530,608);
+            StartPosition=FormStartPosition.CenterScreen; ClientSize=new Size(530,638);
             FormBorderStyle=FormBorderStyle.FixedSingle; MaximizeBox=false; BackColor=Color.FromArgb(247,248,250);
             var title=LabelAt("Replik",24,16,450,42); title.Font=new Font(Font.FontFamily,24,FontStyle.Bold);
             Put(update,275,23,229,32); update.Text="Güncellemeleri denetle"; update.BringToFront();
@@ -79,6 +80,14 @@ namespace Replik {
             Put(lastTranslation,26,466,478,56); lastTranslation.Text="Türkçe: —";
             Put(latency,26,525,478,26);
             foreach(Control c in new Control[]{keyLabel,key,modelLabel,model,start,status,lastSource,lastTranslation,latency}) c.Top+=48;
+            var diagnostics=new LinkLabel {Text="Tanı günlüğünü aç"};
+            Put(diagnostics,26,604,478,25);
+            diagnostics.LinkClicked+=delegate {
+                DiagnosticsLog.Local.Write("diagnostics.open");
+                string path=DiagnosticsLog.Local.FilePath;
+                try {Process.Start(new ProcessStartInfo("notepad.exe","\""+path+"\""){UseShellExecute=false});}
+                catch(System.ComponentModel.Win32Exception ex) {DiagnosticsLog.Local.Error("diagnostics.open.error",ex); MessageBox.Show(this,path,"Tanı günlüğü");}
+            };
             engine.SelectedIndexChanged+=delegate {
                 key.Enabled=model.Enabled=keyLabel.Enabled=modelLabel.Enabled=engine.SelectedIndex==1;
             };
@@ -161,7 +170,10 @@ namespace Replik {
             string result="Çeviri durduruldu.";
             try { await Task.Run(()=>session.Run(source.Token)); }
             catch (OperationCanceledException) { if (!source.IsCancellationRequested) result="Gemini yanıt süresi doldu. Yeniden başlat."; }
-            catch (Exception ex) { result=ex is System.Net.Http.HttpRequestException?"Gemini bağlantısı kurulamadı. İnternet bağlantısını kontrol et.":ex.Message; }
+            catch (Exception ex) {
+                DiagnosticsLog.Local.Error("session.error",ex);
+                result=ex.Message;
+            }
             finally {
                 running=null; source.Dispose();
                 if (!closing) {

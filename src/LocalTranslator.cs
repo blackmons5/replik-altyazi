@@ -19,7 +19,7 @@ namespace Replik {
         }
         public LocalTranslator(CancellationToken token) {
             string root=Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"local");
-            var start=new ProcessStartInfo(Path.Combine(root,"python.exe"),"-B -u translate.py") {
+            var start=new ProcessStartInfo(Path.Combine(root,"python.exe"),"-B -u translate.py --warm-model") {
                 WorkingDirectory=root, CreateNoWindow=true, UseShellExecute=false,
                 RedirectStandardInput=true, RedirectStandardOutput=true
             };

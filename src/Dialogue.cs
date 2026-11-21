@@ -65,7 +65,8 @@ namespace Replik {
             // Confirm less certain changes on a second frame without delaying clear subtitles.
             bool hasSentenceEnd=".!?…".IndexOf(text[text.Length-1])>=0;
             bool completeGtaRow=gtaRow && confidence>=.76f && hasSentenceEnd;
-            bool ambiguousFragment=gtaRow && shown.Length>0 && confidence<.93f && !hasSentenceEnd;
+            bool shortGtaRow=gtaRow && confidence>=.86f && SubtitleText.IsShortUtterance(text);
+            bool ambiguousFragment=gtaRow && shown.Length>0 && confidence<.93f && !hasSentenceEnd && !shortGtaRow;
             if(((confidence<.85f && !completeGtaRow) || ambiguousFragment) &&
                 (now-uncertainSeen>350 || !SubtitleText.SameLine(text,uncertain,true,true))) {
                 if(blankSince<0) blankSince=now;

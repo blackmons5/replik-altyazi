@@ -223,6 +223,12 @@ namespace Replik {
             lateReply.SetResult("Bekle!");
             Check(late.Tick(710)=="Bekle!" && late.Tick(959)==null && late.Tick(960)=="",
                 "A late reply gets a readable interval without surviving a long gap");
+            var shortCue=new Dialogue(s=>Task.FromResult(s=="Wait"?"Bekle!":"Burada kal."));
+            shortCue.Observe("Stay right here.",.96f,0,true);
+            Check(shortCue.Tick(0)=="Burada kal.","Show preceding subtitle");
+            shortCue.Observe("Wait",.90f,120,true);
+            Check(shortCue.Tick(120)=="Bekle!" && !SubtitleText.IsWorldLabel("GO") && SubtitleText.IsWorldLabel("BUS LANE"),
+                "Short GTA interjections can translate on their first confident reading");
             var jitter=new Dialogue(s=>{recognized.Add(s); return Task.FromResult(s);});
             jitter.Observe("PHOTO STUDIO €] SELECT",.95f,0);
             Check(jitter.Tick(0)==null && recognized.Count==0,"Menu controls never reach the translator");

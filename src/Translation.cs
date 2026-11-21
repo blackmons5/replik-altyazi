@@ -1,9 +1,9 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
-using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
@@ -22,6 +22,8 @@ namespace Replik {
         string lastText="";
         float lastConfidence;
         int reused;
+        readonly Stopwatch fallbackClock=Stopwatch.StartNew();
+        long nextFallback;
         static ulong Sample(Bitmap image) {
             ulong hash=14695981039346656037UL;
             // Sparse samples detect static frames; periodically do a full read even on a match.
@@ -43,12 +45,19 @@ namespace Replik {
             lastText=Recognize(source,out lastConfidence); confidence=lastConfidence; return lastText;
         }
         string Recognize(Bitmap source,out float confidence) {
-            double scale=Math.Min(2.0,Math.Min(1400.0/source.Width,300.0/source.Height));
-            using (var image=new Bitmap(Math.Max(1,(int)(source.Width*scale)),Math.Max(1,(int)(source.Height*scale)),PixelFormat.Format24bppRgb)) {
-                using (var g=Graphics.FromImage(image)) {
-                    g.InterpolationMode=InterpolationMode.HighQualityBilinear;
-                    g.DrawImage(source,0,0,image.Width,image.Height);
-                }
+            var processed=new SubtitleImage(source);
+            string text;
+            using(var image=processed.ToBitmap(false)) text=ReadText(image,out confidence);
+            if(confidence>=.78f || fallbackClock.ElapsedMilliseconds<nextFallback) return text;
+            float alternativeScore;
+            string alternative;
+            using(var image=processed.ToBitmap(true)) alternative=ReadText(image,out alternativeScore);
+            nextFallback=fallbackClock.ElapsedMilliseconds+180;
+            if(alternativeScore<=confidence || alternative.Length==0) return text;
+            confidence=alternativeScore;
+            return alternative;
+        }
+        string ReadText(Bitmap image,out float confidence) {
                 using (var pix=PixConverter.ToPix(image))
                 using (var page=engine.Process(pix,PageSegMode.SingleBlock))
                 using (var iterator=page.GetIterator()) {
@@ -67,7 +76,6 @@ namespace Replik {
                     string text=string.Join(" ",lines);
                     return text.Length<=550?text:"";
                 }
-            }
         }
         public void Dispose() { engine.Dispose(); }
     }

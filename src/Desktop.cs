@@ -37,7 +37,7 @@ namespace Replik {
 
     static class Desktop {
         internal static readonly RectangleF[] Bands={
-            new RectangleF(.10f,.72f,.80f,.26f),new RectangleF(.10f,.37f,.80f,.26f),new RectangleF(.10f,.02f,.80f,.26f)
+            new RectangleF(.12f,.76f,.76f,.20f),new RectangleF(.10f,.37f,.80f,.26f),new RectangleF(.10f,.02f,.80f,.26f)
         };
         [StructLayout(LayoutKind.Sequential)] struct Rect { public int Left, Top, Right, Bottom; }
         delegate bool Visit(IntPtr window, IntPtr data);

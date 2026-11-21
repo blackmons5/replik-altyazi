@@ -38,6 +38,22 @@ namespace Replik {
         }
         static void Main() {
             TranslationPath();
+            using(var sample=new Bitmap(120,40))
+            using(var painter=Graphics.FromImage(sample)) {
+                painter.Clear(Color.FromArgb(42,61,86));
+                painter.FillRectangle(Brushes.DimGray,60,0,60,40);
+                painter.FillRectangle(Brushes.White,28,10,4,20);
+                painter.FillRectangle(Brushes.White,88,10,4,20);
+                var prepared=new SubtitleImage(sample);
+                Check(prepared.Size==new Size(300,100),"Small subtitle crops upscale 2.5x");
+                using(var gray=prepared.ToBitmap(false))
+                using(var threshold=prepared.ToBitmap(true)) {
+                    var pixel=gray.GetPixel(55,50);
+                    Check(pixel.R==pixel.G && pixel.G==pixel.B,"Convert color to grayscale");
+                    Check(threshold.GetPixel(75,50).R==0 && threshold.GetPixel(225,50).R==0,"Local threshold detects bright strokes on different backgrounds");
+                    Check(threshold.GetPixel(40,50).R==255 && threshold.GetPixel(265,50).R==255,"Local threshold rejects flat backgrounds");
+                }
+            }
             Check(SubtitleText.Clean("10 FOTO ?? RAF İNCELEME ?? SEÇ")=="","Photo controls and corrupt symbols");
             Check(SubtitleText.Clean("TAKE PHOTO | SELECT")=="","Menu prompts");
             Check(SubtitleText.Clean("PHOTO STUDIO €] SELECT")=="","Photo Studio controls from the reported frame");
@@ -97,6 +113,7 @@ namespace Replik {
             d.Pause(); Check(d.Tick(5100)==null,"Pause clears display");
             var source=new Rectangle(0,0,1920,1080);
             Check(Desktop.Bands.Length==3 && Desktop.Bands[0].Top>Desktop.Bands[1].Top && Desktop.Bands[1].Top>Desktop.Bands[2].Top,"Three ordered preset bands");
+            Check(Desktop.Bands[0].Top>=.75f && Desktop.Bands[0].Bottom<=.97f,"Read bottom subtitles above edge controls");
             Check(Target.PlayerName("Veyra") && Target.PlayerName("NRVideo") && Target.PlayerName("RemotePlay") && !Target.PlayerName("chrome"),"Automatic player matching");
             var region=Desktop.Pixels(new Rectangle(-1920,0,1920,1080),new RectangleF(80f/1920,710f/1080,620f/1920,90f/1080));
             Check(region==new Rectangle(-1840,710,620,90),"Second monitor crop");

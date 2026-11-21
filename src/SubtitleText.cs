@@ -8,6 +8,7 @@ namespace Replik {
         static readonly Regex Space=new Regex(@"\s+");
         static readonly Regex BrokenQuestion=new Regex(@"\uFFFD|(?<=[\p{L}\p{N}])\?+(?=[\p{L}\p{N}])|(?<!\S)\?(?:\s*\?)+|\?\s+\?");
         static readonly Regex QuestionRun=new Regex(@"\?{2,}");
+        static readonly Regex LeadingPlaceholder=new Regex(@"^\s*\?{2,}\s+");
         static readonly Regex LeadingControl=new Regex(@"^(?:(?:\[[A-Z0-9]{1,5}\]|[B-HJ-Z0-9])\s+){1,3}(?=[A-Z][a-z])");
         static readonly Regex StraySymbols=new Regex(@"(?<!\S)(?:[?]{2,}|[=|<>@#]{2,})(?!\S)");
         static readonly Regex SymbolNoise=new Regex(@"[=|<>@#{}\\^~_]");
@@ -87,6 +88,8 @@ namespace Replik {
         }
         internal static string CleanTranslation(string source,string output) {
             if(string.IsNullOrWhiteSpace(output)) return "";
+            // A lone placeholder before an otherwise valid sentence need not blank the caption.
+            output=LeadingPlaceholder.Replace(output.Replace('？','?'),"",1);
             var candidate=RemoveRepeatedRows(CleanQuestions(output));
             if(string.IsNullOrWhiteSpace(candidate) || !candidate.Any(char.IsLetterOrDigit) ||
                 candidate.Length>Math.Min(680,Math.Max(96,source.Length*3+30))) return "";

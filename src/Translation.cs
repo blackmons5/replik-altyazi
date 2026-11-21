@@ -87,14 +87,15 @@ namespace Replik {
                 }
                 nextFallback=fallbackClock.ElapsedMilliseconds+180;
             }
-            if(gtaMode && windows!=null && confidence<.85f && text.Length<=32 && fallbackClock.ElapsedMilliseconds>=nextWindowsRead) {
+            if(gtaMode && windows!=null && confidence<.85f && text.Length<=150 && fallbackClock.ElapsedMilliseconds>=nextWindowsRead) {
                 try {
-                    string second=windows.ReadShort(source,processed);
+                    string second=windows.ReadLine(source,processed);
                     nextWindowsRead=fallbackClock.ElapsedMilliseconds+(second.Length==0?140:0);
-                    if(second.Length>0) {
+                    bool agrees=SubtitleText.SameLine(text,second,false);
+                    if(second.Length>0 && (agrees || text.Length<=32 || SubtitleText.IsClippedRead(text,second,false))) {
                         // An independent match can dispatch immediately. A Windows-only
                         // rescue needs a second frame because this API has no confidence score.
-                        confidence=SubtitleText.SameLine(text,second,false) ? .95f : .74f;
+                        confidence=agrees ? .95f : .74f;
                         return second;
                     }
                 } catch(System.Runtime.InteropServices.COMException) {windows=null;}

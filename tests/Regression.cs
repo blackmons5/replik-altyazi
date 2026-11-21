@@ -131,11 +131,16 @@ namespace Replik {
                 using(var fmt=new StringFormat {Alignment=StringAlignment.Center}) {
                     g.Clear(Color.FromArgb(38,42,48));
                     g.DrawString("Wait",font,Brushes.White,300,27,fmt);
-                    var actual=windows.ReadShort(crop,new SubtitleImage(crop));
+                    var actual=windows.ReadLine(crop,new SubtitleImage(crop));
                     Check(actual=="Wait","Windows OCR reads the centered short subtitle: "+actual);
                     g.Clear(Color.FromArgb(38,42,48));
+                    g.DrawString("We still have time to change our plans.",font,Brushes.White,300,27,fmt);
+                    actual=windows.ReadLine(crop,new SubtitleImage(crop));
+                    Check(actual.StartsWith("We still have time to change our plans",StringComparison.OrdinalIgnoreCase),
+                        "Windows OCR reads a longer centered subtitle: "+actual);
+                    g.Clear(Color.FromArgb(38,42,48));
                     g.DrawString("BUS LANE",font,Brushes.White,300,27,fmt);
-                    Check(windows.ReadShort(crop,new SubtitleImage(crop))=="","Windows OCR rejects road labels");
+                    Check(windows.ReadLine(crop,new SubtitleImage(crop))=="","Windows OCR rejects road labels");
                 }
                 Console.WriteLine("English Windows OCR read Wait and rejected the road label.");
             }
@@ -191,6 +196,9 @@ namespace Replik {
             Check(SubtitleText.Clean("Meet me at gate #3.")=="Meet me at gate #3.","Preserve meaningful punctuation");
             Check(SubtitleText.Clean("Wh????at happened?")=="" && SubtitleText.Clean("Take ???? now.")=="","Reject broken words before translation");
             Check(SubtitleText.CleanTranslation("Where?","Nereye ????")=="" && SubtitleText.CleanTranslation("Where?","G?rüşürüz.")=="","Reject isolated and embedded question placeholders");
+            Check(SubtitleText.CleanTranslation("I know who you are.","?? Kim olduğunu biliyorum.")=="Kim olduğunu biliyorum.",
+                "Remove a leading placeholder without dropping a usable line");
+            Check(SubtitleText.CleanTranslation("I know.","?? ?? ?? Kim olduğunu biliyorum.")=="","Reject multiple placeholders");
             Check(SubtitleText.CleanTranslation("Really?","Gerçekten????")=="Gerçekten?" && SubtitleText.CleanTranslation("Why?","Neden? Ne oldu?!")=="Neden? Ne oldu?!","Preserve questions and their meaning");
             Check(!SubtitleText.SameLine("You must turn left at gate 2 tonight.","You must turn left at gate 3 tonight.",true),"Keep changed numbers");
             Check(!SubtitleText.SameLine("We can go back that way right now.","We can't go back that way right now.",true),"Keep changed negation");
@@ -285,6 +293,15 @@ namespace Replik {
             switchCue.Observe("",0,90,true);
             switchCue.Observe("Run!",.81f,140,true);
             Check(switchCue.Tick(140)=="Koş!","A genuine new subtitle replaces the caption inside the blank grace period");
+            var changing=new Dialogue(s=>Task.FromResult(s=="Stay here."?"Burada kal.":"Doğru zamanı beklemeliyiz,"));
+            changing.Observe("Stay here.",.96f,0,true);
+            Check(changing.Tick(0)=="Burada kal.","Original subtitle is on screen");
+            changing.Observe("We just need to wait for the right time,",.80f,100,true);
+            Check(changing.Tick(100)=="","A plausible new line immediately hides the outdated translation");
+            changing.Observe("",0,250,true);
+            Check(changing.Tick(250)==null,"An intervening OCR miss cannot restore the outdated translation");
+            changing.Observe("We just need to wait for the right time,",.81f,515,true);
+            Check(changing.Tick(515)=="Doğru zamanı beklemeliyiz,","A second matching OCR read still confirms after a slow frame");
             var seen=new List<string>();
             var noisy=new Dialogue(s=>{seen.Add(s); return Task.FromResult(s);});
             noisy.Observe("Stay right here.",.96f,0);

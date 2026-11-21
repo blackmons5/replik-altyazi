@@ -22,7 +22,7 @@ namespace Replik {
               catch(UnauthorizedAccessException) {return null;}
         }
 
-        internal string ReadShort(Bitmap source,SubtitleImage shape) {
+        internal string ReadLine(Bitmap source,SubtitleImage shape) {
             var size=shape.Size;
             using(var scaled=new Bitmap(size.Width,size.Height,PixelFormat.Format32bppArgb)) {
                 using(var graphics=Graphics.FromImage(scaled)) {
@@ -40,9 +40,9 @@ namespace Replik {
                     if(result.TextAngle.HasValue && Math.Abs(result.TextAngle.Value)>1.5) return "";
                     string candidate="";
                     foreach(var line in result.Lines) {
-                        if(line.Words.Count==0 || line.Words.Count>4) continue;
+                        if(line.Words.Count==0) continue;
                         var text=SubtitleText.Clean(line.Text);
-                        if(text.Length<2 || text.Length>32 || SubtitleText.IsWorldLabel(text)) continue;
+                        if(text.Length<2 || text.Length>150 || SubtitleText.IsWorldLabel(text)) continue;
                         var box=Rectangle.Empty;
                         foreach(var word in line.Words) {
                             var b=word.BoundingRect;

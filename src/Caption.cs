@@ -23,7 +23,7 @@ namespace Replik {
             if(Visible && line==last && window==previousWindow && area==previousArea) return;
             var next=Render(line,window.Size);
             int x=Math.Max(window.Left,Math.Min(window.Right-next.Width,area.Left+(area.Width-next.Width)/2));
-            int gap=Math.Max(4,window.Height/140);
+            int gap=Math.Max(3,window.Height/190);
             int y=area.Top-gap-next.Height;
             if(y<window.Top) y=area.Bottom+gap;
             if(y+next.Height>window.Bottom) {next.Dispose(); Hide(); return;}

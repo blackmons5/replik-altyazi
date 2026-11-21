@@ -1,4 +1,8 @@
-Replik varsayılan olarak yerel OPUS-MT ile çevirir. Model, oturum başlarken ilk replik için hazırlanır. Gemini isteğe bağlıdır. Gemini seçiliyken bağlantı kesilirse veya kullanılabilir bir yanıt zamanında gelmezse yerel model devreye girer.
+GTA alt bölgesinde yeni İngilizce altyazı belirirken önceki Türkçe satır daha erken gizlenir. Tesseract’ın emin olamadığı uzun diyalogları da Windows OCR ikinci kez okuyabilir.
+
+Türkçe altyazı kutusu alt bölgeye biraz daha yaklaştırıldı. Çevirinin başında tek başına kalan `??` temizlenir. Birden fazla bozuk parça içeren satırlar elenir.
+
+Replik varsayılan olarak yerel OPUS-MT ile çevirir. Gemini isteğe bağlıdır. Gemini seçiliyken bağlantı kesilirse veya kullanılabilir bir yanıt zamanında gelmezse yerel model devreye girer.
 
 **Tanı günlüğünü aç** bağlantısı, pencere yakalama, OCR ve çeviri durumunu gösterir. Günlük bilgisayarda tutulur. İngilizce ve Türkçe altyazı metinleri, ekran görüntüleri ve API anahtarı günlüğe yazılmaz.
 

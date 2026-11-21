@@ -1,15 +1,25 @@
 [Setup]
 AppId=ReplikSubtitleTR
 AppName=Replik
-AppVersion=0.2.0
+AppVersion={#AppVer}
+#ifdef Patch
+DefaultDirName={code:InstalledDir}
+DisableDirPage=yes
+UsePreviousAppDir=no
+#else
 DefaultDirName={autopf}\Replik
+#endif
 DefaultGroupName=Replik
 DisableProgramGroupPage=yes
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0.19041
 OutputDir=dist
+#ifdef Patch
+OutputBaseFilename=Replik-Guncelleme-x64-r1
+#else
 OutputBaseFilename=Replik-Kurulum-x64
+#endif
 Compression=lzma2/fast
 SolidCompression=yes
 UninstallDisplayIcon={app}\Replik.exe
@@ -19,17 +29,49 @@ WizardStyle=modern
 Name: "turkish"; MessagesFile: "compiler:Languages\Turkish.isl"
 
 [Files]
+#ifdef Patch
+Source: "build\app\Replik.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "build\app\THIRD-PARTY.txt"; DestDir: "{app}"; Flags: ignoreversion
+Source: "build\app\local\translate.py"; DestDir: "{app}\local"; Flags: ignoreversion
+Source: "build\app\local\runtime-id.txt"; DestDir: "{app}\local"; Flags: ignoreversion
+#else
 Source: "build\app\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion
 Source: "build\inputs\VC_redist.x64.exe"; DestDir: "{tmp}"; Flags: dontcopy
+#endif
 
 [Icons]
 Name: "{group}\Replik"; Filename: "{app}\Replik.exe"
 
 [Run]
+#ifndef Patch
 Filename: "{app}\local\python.exe"; Parameters: "-B translate.py --sync-pack"; WorkingDir: "{app}\local"; StatusMsg: "CouchSubs GTA 6 paketi kontrol ediliyor…"; Flags: runhidden runasoriginaluser waituntilterminated
+#endif
 Filename: "{app}\Replik.exe"; Description: "Replik uygulamasını aç"; Flags: postinstall nowait skipifsilent unchecked
 
 [Code]
+#ifdef Patch
+const RegPath = 'SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\ReplikSubtitleTR_is1';
+function InstalledDir(Param: String): String;
+begin
+  if not RegQueryStringValue(HKLM64, RegPath, 'InstallLocation', Result) then Result := '';
+  Result := RemoveBackslashUnlessRoot(Result);
+end;
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  Dir, InstalledVersion: String;
+  Marker: AnsiString;
+  Compatible: Boolean;
+begin
+  Dir := InstalledDir('');
+  Compatible := LoadStringFromFile(Dir + '\local\runtime-id.txt', Marker) and (Trim(String(Marker)) = 'r1');
+  if not Compatible and not FileExists(Dir + '\local\runtime-id.txt') then
+    Compatible := RegQueryStringValue(HKLM64, RegPath, 'DisplayVersion', InstalledVersion) and (InstalledVersion = '0.2.0');
+  Result := 'Bu küçük güncelleme için uyumlu Replik kurulumu gerekiyor. Tam kurulum dosyasını kullanın.';
+  if (Dir <> '') and (CompareText(Dir, RemoveBackslashUnlessRoot(ExpandConstant('{app}'))) = 0)
+    and Compatible and FileExists(Dir + '\local\model\model.bin') and FileExists(Dir + '\local\python.exe')
+    and FileExists(Dir + '\tessdata\eng.traineddata') then Result := '';
+end;
+#else
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 var
   Code: Integer;
@@ -44,3 +86,4 @@ begin
   else if (Code <> 0) and (Code <> 1638) then
     Result := Format('Microsoft Visual C++ kurulumu tamamlanamadı (%d).', [Code]);
 end;
+#endif

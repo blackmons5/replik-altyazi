@@ -43,11 +43,18 @@ Fetch 'source.spm' "$upstream/source.spm" '180d3f94ddfee5585d78b702290ded0f4f9bd
 Fetch 'target.spm' "$upstream/target.spm" 'cd0c475692178b6c626aadaef01bd8f98d8053946938e4e67005fc1e4811d797'
 Copy-Item build/inputs/source.spm,build/inputs/target.spm $modelDir
 Copy-Item local/translate.py $runtime
+Copy-Item local/runtime-id.txt $runtime
 & "$runtime/python.exe" -B -c "import ctranslate2, sentencepiece"
 if ($LASTEXITCODE) {throw 'Bundled local runtime failed to start'}
 $csc = Join-Path $env:WINDIR 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
 $sources = (Get-ChildItem src/*.cs).FullName
+$version=(Get-Content version.txt -Raw).Trim()
+if ($version -notmatch '^\d+\.\d+\.\d+$') { throw 'Invalid version' }
+Set-Content build/ReleaseVersion.cs -Encoding ascii -Value ('[assembly: System.Reflection.AssemblyVersion("' + $version + '.0")]')
+$sources+= (Resolve-Path build/ReleaseVersion.cs).Path
 & $csc /nologo /codepage:65001 /target:winexe /platform:x64 /optimize+ /out:build/app/Replik.exe /r:build/app/Tesseract.dll /r:System.Drawing.dll /r:System.Windows.Forms.dll /r:System.Net.Http.dll /r:System.Web.Extensions.dll $sources
 if ($LASTEXITCODE) { throw 'C# compilation failed' }
-& $Compiler setup.iss
+& $Compiler "/DAppVer=$version" setup.iss
 if ($LASTEXITCODE) { throw 'Installer compilation failed' }
+& $Compiler "/DAppVer=$version" /DPatch=1 setup.iss
+if ($LASTEXITCODE) { throw 'Update compilation failed' }

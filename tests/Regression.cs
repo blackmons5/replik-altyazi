@@ -38,6 +38,16 @@ namespace Replik {
         }
         static void Main() {
             TranslationPath();
+            var patch=new Updates.Asset {name="Replik-Guncelleme-x64-r1.exe",size=100,digest="sha256:"+new string('1',64)};
+            var full=new Updates.Asset {name=Updates.Full,size=200,digest=patch.digest};
+            string prefix="https://github.com/blackmons5/replik-altyazi/releases/download/v0.3.0/";
+            patch.browser_download_url=prefix+patch.name; full.browser_download_url=prefix+full.name;
+            var release=new Updates.Release {tag_name="v0.3.0",assets=new[]{full,patch}};
+            Check(Updates.Select(release,new Version(0,2,1,0),"r1").File==patch,"Prefer compatible patch");
+            Check(Updates.Select(release,new Version(0,2,1,0),"r2").File==full,"Full installer for changed dependencies");
+            Check(Updates.Select(release,new Version(0,3,0,0),"r1")==null,"No update for current version");
+            release.prerelease=true;
+            Check(Updates.Select(release,new Version(0,2,1,0),"r1")==null,"Ignore prereleases");
             var jobs=new Dictionary<string,TaskCompletionSource<string>>();
             var d=new Dialogue(s=>{var job=new TaskCompletionSource<string>();jobs.Add(s,job);return job.Task;});
             d.Observe("Get",.93f,0); d.Tick(0);

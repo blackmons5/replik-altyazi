@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
@@ -32,6 +33,11 @@ namespace Replik {
         readonly ComboBox engine=new ComboBox();
         readonly Label lastSource=new Label(), lastTranslation=new Label();
         readonly Label latency=new Label();
+        readonly Button update=new Button();
+        readonly System.Windows.Forms.Timer updateTimer=new System.Windows.Forms.Timer {Interval=6*60*60*1000};
+        readonly CancellationTokenSource lifetime=new CancellationTokenSource();
+        Updates.Offer offer;
+        bool checking,downloading;
         RectangleF fraction;
         CancellationTokenSource running;
         string caption="";
@@ -43,6 +49,10 @@ namespace Replik {
             StartPosition=FormStartPosition.CenterScreen; ClientSize=new Size(530,608);
             FormBorderStyle=FormBorderStyle.FixedSingle; MaximizeBox=false; BackColor=Color.FromArgb(247,248,250);
             var title=LabelAt("Replik",24,16,450,42); title.Font=new Font(Font.FontFamily,24,FontStyle.Bold);
+            Put(update,275,23,229,32); update.Text="Güncellemeleri denetle"; update.BringToFront();
+            update.Click+=async delegate { if(offer==null) await CheckUpdates(true); else await InstallUpdate(); };
+            Shown+=async delegate { updateTimer.Start(); await CheckUpdates(false); };
+            updateTimer.Tick+=async delegate { await CheckUpdates(false); };
             LabelAt("İngilizce oyun altyazısı  →  Türkçe",26,60,480,26);
             LabelAt("Oyun penceresi",26,103,230,25);
             Put(windows,26,129,363,30); windows.DropDownStyle=ComboBoxStyle.DropDownList;
@@ -71,9 +81,33 @@ namespace Replik {
             engine.SelectedIndex=0;
             start.Click+=async delegate { await Toggle(); };
             positioning.Tick+=delegate { PositionCaption(); };
-            FormClosing+=delegate { closing=true; if (running!=null) running.Cancel(); positioning.Stop(); overlay.Hide(); };
-            FormClosed+=delegate { positioning.Dispose(); overlay.Dispose(); };
+            FormClosing+=delegate { closing=true; lifetime.Cancel(); if (running!=null) running.Cancel(); positioning.Stop(); overlay.Hide(); };
+            FormClosed+=delegate { updateTimer.Dispose(); positioning.Dispose(); overlay.Dispose(); lifetime.Dispose(); };
             Reload(); status.Text="Oyunda İngilizce altyazıları aç.";
+        }
+        async Task CheckUpdates(bool manual) {
+            if(checking || downloading || closing) return;
+            checking=true;
+            try {
+                var found=await Updates.Check(lifetime.Token);
+                if(closing) return;
+                offer=found;
+                update.Text=found!=null?"Yeni sürüm "+found.Version+" • Güncelle":manual?"Güncelsin • Tekrar denetle":"Güncellemeleri denetle";
+            } catch(Exception) {
+                if(manual && !closing) update.Text="Denetim başarısız • Tekrar dene";
+            } finally {checking=false;}
+        }
+        async Task InstallUpdate() {
+            if(downloading || checking || closing) return;
+            downloading=true; update.Enabled=false;
+            try {
+                string path=await Updates.Download(offer,new Progress<int>(p=>{if(!closing) update.Text="Güncelleme indiriliyor %"+p;}),lifetime.Token);
+                if(closing) return;
+                Process.Start(new ProcessStartInfo(path){UseShellExecute=true});
+                Close();
+            } catch(Exception ex) {
+                if(!closing) {update.Text="Güncellemeyi tekrar dene"; MessageBox.Show(this,ex.Message,"Güncelleme");}
+            } finally {downloading=false; if(!closing) update.Enabled=true;}
         }
         void Put(Control c,int x,int y,int w,int h) { c.SetBounds(x,y,w,h); Controls.Add(c); }
         Label LabelAt(string text,int x,int y,int w,int h) { var l=new Label {Text=text}; Put(l,x,y,w,h); return l; }

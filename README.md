@@ -15,4 +15,10 @@ API anahtarı oturum boyunca bellekte tutulur. Seçilen ekran bölgesi yerel ola
 
 ## Derleme
 
+### Uygulama güncellemeleri
+
+Replik 0.2.1 ve üzeri açılışta, ardından altı saatte bir yeni kararlı GitHub sürümünü denetler. Sağ üstteki düğmeyle elle de denetleyebilirsin. **Güncelle** uyumlu küçük paketi, çalışma zamanı değiştiğinde tam kurulumu indirir. Dosyanın boyutu ve SHA-256 özeti doğrulandıktan sonra Windows kurulum sihirbazı açılır. 0.2.0 kullanıcıları ilk geçişte Releases sayfasındaki küçük paketi kullanabilir.
+
+### Windows EXE
+
 Derleme için 64 bit Windows, .NET Framework 4.8, Python/pip ve Inno Setup 6 gerekir. PowerShell'de `./build.ps1 -Compiler 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'` çalıştır. Kurulum dosyası `dist` klasörüne yazılır.

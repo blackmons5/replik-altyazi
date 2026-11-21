@@ -32,12 +32,31 @@ jobs:
           if ($LASTEXITCODE) {throw 'Test build failed'}
           & ./build/app/test.exe
           if ($LASTEXITCODE) {throw 'Regression tests failed'}
+      - name: Verify upgrade of the existing offline model
+        run: |
+          $ErrorActionPreference='Stop'
+          $old=Join-Path $env:RUNNER_TEMP 'Replik-old.exe'
+          curl.exe -fsSL --retry 2 https://github.com/blackmons5/replik-altyazi/releases/download/v0.2.0/Replik-Kurulum-x64.exe -o $old
+          if ($LASTEXITCODE -or (Get-FileHash $old).Hash -ne 'bc398e91fe09e8b215e121480d02b3f5a8045bb79dabe92b4828f7676173db6d') {throw 'Baseline download failed'}
+          $dir=Join-Path $env:RUNNER_TEMP 'Installed Replik'
+          $argsList=@('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',('/DIR="'+$dir+'"'))
+          $p=Start-Process $old -ArgumentList $argsList -WindowStyle Hidden -Wait -PassThru
+          if ($p.ExitCode) {throw "Baseline installation failed: $($p.ExitCode)"}
+          $model=Get-Item "$dir/local/model/model.bin"
+          $stamp=$model.LastWriteTimeUtc
+          $patch=(Get-Item dist/Replik-Guncelleme-x64-r1.exe).FullName
+          $p=Start-Process $patch -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART') -WindowStyle Hidden -Wait -PassThru
+          if ($p.ExitCode) {throw "Upgrade failed: $($p.ExitCode)"}
+          if ((Get-FileHash "$dir/Replik.exe").Hash -ne (Get-FileHash build/app/Replik.exe).Hash) {throw 'Program not updated'}
+          if ((Get-Item $model.FullName).LastWriteTimeUtc -ne $stamp) {throw 'Existing model was replaced'}
       - name: Publish verified installer
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           $ErrorActionPreference='Stop'
           $name='Replik-Kurulum-x64.exe'
+          $version=(Get-Content version.txt -Raw).Trim()
+          $patch=Get-Item dist/Replik-Guncelleme-x64-r1.exe
           $file=Get-Item "dist/$name"
           $digest=(Get-FileHash $file.FullName).Hash.ToLowerInvariant()
           git config user.name 'github-actions[bot]'
@@ -51,7 +70,8 @@ jobs:
           git push origin HEAD:master
           if ($LASTEXITCODE) {throw 'Repository installer upload failed'}
           $commit=git rev-parse HEAD
-          gh release create v0.2.0 $file.FullName --target $commit --title 'Replik 0.2.0' --notes-file release-notes.md --latest
+          gh release create "v$version" $file.FullName $patch.FullName --target $commit --title "Replik $version" --notes-file release-notes.md --latest
           if ($LASTEXITCODE) {throw 'Release upload failed'}
-          $tag=gh release view v0.2.0 --json assets | ConvertFrom-Json
+          $tag=gh release view "v$version" --json assets | ConvertFrom-Json
           if (($tag.assets | Where-Object name -eq $name).digest -ne "sha256:$digest") {throw 'Release checksum mismatch'}
+          if (($tag.assets | Where-Object name -eq $patch.Name).digest -ne ('sha256:'+(Get-FileHash $patch.FullName).Hash)) {throw 'Update checksum mismatch'}

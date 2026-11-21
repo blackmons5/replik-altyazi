@@ -29,11 +29,11 @@ namespace Replik {
         void Kill() {
             try { if(!worker.HasExited) worker.Kill(); } catch(InvalidOperationException) {}
         }
-        public async Task<Reply> Read(string text,bool local,CancellationToken token) {
+        public async Task<Reply> Read(string text,bool local,CancellationToken token,bool usePack=true) {
             await turn.WaitAsync(token).ConfigureAwait(false);
             try {
                 var json=new JavaScriptSerializer();
-                string request=json.Serialize(new {line=Convert.ToBase64String(Encoding.UTF8.GetBytes(text)),local=local});
+                string request=json.Serialize(new {line=Convert.ToBase64String(Encoding.UTF8.GetBytes(text)),local=local,pack=usePack});
                 await worker.StandardInput.WriteLineAsync(request).ConfigureAwait(false);
                 await worker.StandardInput.FlushAsync().ConfigureAwait(false);
                 var line=await worker.StandardOutput.ReadLineAsync().ConfigureAwait(false);

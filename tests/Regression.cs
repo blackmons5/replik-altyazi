@@ -40,6 +40,7 @@ namespace Replik {
             using(var reader=new Reader())
             using(var crop=new Bitmap(850,115))
             using(var regular=new Font("Segoe UI",18,GraphicsUnit.Pixel))
+            using(var objective=new Font("Segoe UI",18,FontStyle.Bold,GraphicsUnit.Pixel))
             using(var paint=new Font("Arial",42,FontStyle.Bold,GraphicsUnit.Pixel))
             using(var g=Graphics.FromImage(crop)) {
                 float score;
@@ -52,6 +53,11 @@ namespace Replik {
                 g.Clear(Color.FromArgb(35,39,44));
                 g.DrawString("BUS LANE",regular,Brushes.White,384,50);
                 Check(reader.Read(crop,out score,true)=="","Ignore a road marking at subtitle size");
+                g.Clear(Color.FromArgb(35,39,44));
+                g.DrawString("Locate the",objective,Brushes.White,363,50);
+                using(var accent=new SolidBrush(Color.FromArgb(230,71,145)))
+                    g.DrawString("courier",objective,accent,453,50);
+                Check(reader.Read(crop,out score,true)=="","Ignore a bold objective with a colored keyword");
                 g.Clear(Color.FromArgb(35,39,44));
                 g.DrawString("WATER STORAGE",regular,Brushes.White,362,50);
                 Check(reader.Read(crop,out score,true)=="","Ignore centered uppercase building signs");
@@ -179,6 +185,14 @@ namespace Replik {
             var duplicateResult=new Dialogue(s=>Task.FromResult("Burada kal.\r\nBURADA KAL!"));
             duplicateResult.Observe("Stay right here.",.95f,0);
             Check(duplicateResult.Tick(0)=="Burada kal.","Drop repeated lines in a translation response");
+            var corrupt=new Dialogue(s=>Task.FromResult(s=="Start."?"Başla.":s=="Wrong."?"Kırık satır. ?? ?? ?? ??":"Devam et."));
+            corrupt.Observe("Start.",.95f,0);
+            Check(corrupt.Tick(0)=="Başla.","Display a clean translation");
+            corrupt.Observe("Wrong.",.96f,250);
+            Check(corrupt.Tick(250)=="" && corrupt.Tick(350)==null,"Clear a malformed result without breaking the session");
+            corrupt.Observe("Continue.",.95f,400);
+            Check(corrupt.Tick(400)=="Devam et.","Keep translating after a malformed response");
+            Check(SubtitleText.CleanTranslation("Come on!","Hadi, hadi! Hemen!")=="Hadi, hadi! Hemen!","Keep a valid emphatic translation");
             var patch=new Updates.Asset {name="Replik-Guncelleme-x64-r1.exe",size=100,digest="sha256:"+new string('1',64)};
             var full=new Updates.Asset {name=Updates.Full,size=200,digest=patch.digest};
             string prefix="https://github.com/blackmons5/replik-altyazi/releases/download/v0.3.0/";

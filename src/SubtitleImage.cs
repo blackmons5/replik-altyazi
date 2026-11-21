@@ -8,6 +8,7 @@ namespace Replik {
     sealed class SubtitleImage {
         readonly int width,height;
         readonly byte[] gray;
+        readonly bool[] saturated;
         readonly byte[] contrast;
         byte[] brightMask;
         internal Size Size { get {return new Size(width,height);} }
@@ -18,6 +19,7 @@ namespace Replik {
             width=Math.Max(1,(int)Math.Round(source.Width*scale));
             height=Math.Max(1,(int)Math.Round(source.Height*scale));
             var luminance=new byte[width*height];
+            saturated=new bool[luminance.Length];
             using(var resized=new Bitmap(width,height,PixelFormat.Format24bppRgb)) {
                 using(var g=Graphics.FromImage(resized)) {
                     g.InterpolationMode=InterpolationMode.HighQualityBilinear;
@@ -30,8 +32,12 @@ namespace Replik {
                     for(int y=0;y<height;y++) {
                         Marshal.Copy(IntPtr.Add(data.Scan0,y*data.Stride),row,0,row.Length);
                         int offset=y*width;
-                        for(int x=0,i=0;x<width;x++,i+=3)
+                        for(int x=0,i=0;x<width;x++,i+=3) {
                             luminance[offset+x]=(byte)((29*row[i]+150*row[i+1]+77*row[i+2]+128)>>8);
+                            int brightest=Math.Max(row[i],Math.Max(row[i+1],row[i+2]));
+                            int darkest=Math.Min(row[i],Math.Min(row[i+1],row[i+2]));
+                            saturated[offset+x]=brightest>=175 && brightest-darkest>=66;
+                        }
                     }
                 } finally {resized.UnlockBits(data);}
             }
@@ -91,19 +97,43 @@ namespace Replik {
         internal bool HasSubtitleStrokes(Rectangle bounds) {
             var mask=BrightMask();
             bounds=Rectangle.Intersect(bounds,new Rectangle(Point.Empty,Size));
-            int ink=0,thick=0,radius=Math.Max(1,(int)Math.Ceiling(bounds.Height*.08));
+            int size=bounds.Width*bounds.Height;
+            if(size==0) return false;
+            int ink=0,top=-1,bottom=-1;
+            for(int y=bounds.Top;y<bounds.Bottom;y++) {
+                int rowInk=0;
+                for(int x=bounds.Left;x<bounds.Right;x++) if(mask[y*width+x]==0) rowInk++;
+                ink+=rowInk;
+                if(rowInk<Math.Max(2,bounds.Width/50)) continue;
+                if(top<0) top=y;
+                bottom=y;
+            }
+            if(top<0 || ink<size*.055 || ink>size*.57) return false;
+            // Base the stroke test on the visible neutral glyphs, since a colored word can enlarge the OCR box.
+            int thick=0,radius=Math.Max(1,(int)Math.Ceiling((bottom-top+1)*.08));
             for(int y=bounds.Top;y<bounds.Bottom;y++) {
                 for(int x=bounds.Left;x<bounds.Right;x++) {
                     int i=y*width+x;
                     if(mask[i]!=0) continue;
-                    ink++;
                     if(x-radius>=bounds.Left && x+radius<bounds.Right && y-radius>=bounds.Top && y+radius<bounds.Bottom &&
                         mask[i-radius]==0 && mask[i+radius]==0 && mask[i-radius*width]==0 && mask[i+radius*width]==0)
                         thick++;
                 }
             }
-            int size=bounds.Width*bounds.Height;
-            return size>0 && ink>=size*.055 && ink<=size*.57 && thick<=ink*.16;
+            if(thick>ink*.07) return false;
+
+            // The OCR box may end before a colored word that the luminance mask did not pick up.
+            int colorSpan=Math.Max(2,bounds.Height/12);
+            int from=Math.Max(colorSpan,bounds.Left-bounds.Height*2),to=Math.Min(width-colorSpan,bounds.Right+bounds.Height*2);
+            int colored=0;
+            for(int y=bounds.Top+1;y<bounds.Bottom-1;y++) {
+                for(int x=from;x<to;x++) {
+                    int i=y*width+x;
+                    // Ignore narrow RGB fringes from antialiasing around neutral subtitles.
+                    if(saturated[i] && saturated[i-colorSpan] && saturated[i+colorSpan]) colored++;
+                }
+            }
+            return colored<=Math.Max(size*.035,ink*.27);
         }
 
         byte[] LocalThreshold() {

@@ -6,6 +6,7 @@ using System.Text.RegularExpressions;
 namespace Replik {
     static class SubtitleText {
         static readonly Regex Space=new Regex(@"\s+");
+        static readonly Regex UnknownWords=new Regex(@"\?{2,}");
         static readonly Regex LeadingControl=new Regex(@"^(?:(?:\[[A-Z0-9]{1,5}\]|[B-HJ-Z0-9])\s+){1,3}(?=[A-Z][a-z])");
         static readonly Regex StraySymbols=new Regex(@"(?<!\S)(?:[?]{2,}|[=|<>@#]{2,})(?!\S)");
         static readonly Regex Word=new Regex(@"[\p{L}\p{N}]+");
@@ -58,6 +59,14 @@ namespace Replik {
                 if(row.Length!=0 && (rows.Count==0 || !SameLine(row,rows[rows.Count-1],false))) rows.Add(row);
             }
             return string.Join(Environment.NewLine,rows);
+        }
+        internal static string CleanTranslation(string source,string output) {
+            if(string.IsNullOrWhiteSpace(output) || output.Contains("\uFFFD") || output.Contains("??????") ||
+                UnknownWords.Matches(output).Count>=3) return "";
+            var candidate=RemoveRepeatedRows(output);
+            if(string.IsNullOrWhiteSpace(candidate) || !candidate.Any(char.IsLetterOrDigit) ||
+                candidate.Length>Math.Min(680,Math.Max(96,source.Length*3+30))) return "";
+            return candidate.Trim();
         }
 
         internal static bool IsClippedRead(string shorter,string longer,bool requireMajority=true) {

@@ -90,7 +90,7 @@ namespace Replik {
         }
         async Task<string> Translate(Cue cue,CancellationToken token) {
             var text=await translate(cue.Text,token).ConfigureAwait(false);
-            return SubtitleText.RemoveRepeatedRows(text);
+            return SubtitleText.CleanTranslation(cue.Text,text);
         }
         string Show(Cue cue,string text) {
             visibleCue=cue;
@@ -118,7 +118,7 @@ namespace Replik {
                 pending=null;
                 translated=completed.Translation.GetAwaiter().GetResult();
             }
-            if(string.IsNullOrWhiteSpace(translated)) throw new InvalidOperationException("Çeviri motoru boş yanıt döndürdü.");
+            if(translated.Length==0) return Show(current,"");
             if(cache.Count>=512) cache.Clear();
             cache[current.Text]=translated;
             return Show(current,translated);

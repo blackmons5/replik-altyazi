@@ -113,6 +113,17 @@ namespace Replik {
             if(neighbor==null) return new[]{main};
             return new[]{main,neighbor}.OrderBy(r=>r.Bounds.Top);
         }
+        static bool HasReliableWords(ResultIterator iterator) {
+            const PageIteratorLevel line=PageIteratorLevel.TextLine,word=PageIteratorLevel.Word;
+            int wordCount=0,reliable=0;
+            do {
+                var value=iterator.GetText(word);
+                if(string.IsNullOrWhiteSpace(value) || !value.Any(char.IsLetter)) continue;
+                wordCount++;
+                if(iterator.GetConfidence(word)>=62) reliable++;
+            } while(iterator.Next(line,word));
+            return wordCount>0 && reliable*3>=wordCount*2;
+        }
         string ReadText(Bitmap image,SubtitleImage gta,out float confidence) {
             using (var pix=PixConverter.ToPix(image))
             using (var page=engine.Process(pix,PageSegMode.SingleBlock))
@@ -126,7 +137,7 @@ namespace Replik {
                     var line=SubtitleText.Clean(iterator.GetText(PageIteratorLevel.TextLine));
                     if(line.Length==0) continue;
                     var box=Rectangle.Empty;
-                    if(gta!=null && !IsGtaRow(gta,iterator,line,out box)) continue;
+                    if(gta!=null && (!IsGtaRow(gta,iterator,line,out box) || !HasReliableWords(iterator))) continue;
                     found.Add(new Row {Bounds=box,Text=line,Confidence=score});
                 } while(iterator.Next(PageIteratorLevel.TextLine));
                 if(found.Count==0) return "";
@@ -193,8 +204,12 @@ namespace Replik {
                     var began=clock.ElapsedMilliseconds;
                     using(var linked=CancellationTokenSource.CreateLinkedTokenSource(requests.Token,cueToken)) {
                         var result=await worker.Read(text,local,linked.Token).ConfigureAwait(false);
-                        var translated=result.text;
-                        if(string.IsNullOrEmpty(translated)) {
+                        var translated=SubtitleText.CleanTranslation(text,result.text);
+                        if(translated.Length==0 && local && result.provider=="GTA 6 paketi") {
+                            result=await worker.Read(text,true,linked.Token,false).ConfigureAwait(false);
+                            translated=SubtitleText.CleanTranslation(text,result.text);
+                        }
+                        if(!local && string.IsNullOrEmpty(translated)) {
                             report(result.pack+" • Gemini çeviriyor…",null);
                             translated=await Gemini.Translate(key,model,text,linked.Token).ConfigureAwait(false);
                         }

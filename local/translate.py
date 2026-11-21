@@ -130,10 +130,7 @@ class Opus:
     def translate(self, text):
         pieces = self.source.encode(text, out_type=str) + ["</s>"]
         output = self.engine.translate_batch([pieces], beam_size=1, max_decoding_length=256)
-        result = self.target.decode(output[0].hypotheses[0]).strip()
-        if not result:
-            raise ValueError("OPUS-MT boş çeviri üretti")
-        return result
+        return self.target.decode(output[0].hypotheses[0]).strip()
 
 
 def serve():
@@ -144,7 +141,7 @@ def serve():
         try:
             request = json.loads(line)
             text = base64.b64decode(request["line"]).decode("utf-8")
-            translated = pack.lookup(text)
+            translated = pack.lookup(text) if request.get("pack", True) else None
             provider = "GTA 6 paketi"
             if not translated and request["local"]:
                 model = model or Opus()

@@ -1,6 +1,6 @@
 Replik her Türkçe çeviriyi ekrandaki İngilizce repliğe bağlar. OCR yeni bir repliği doğruladığında önceki çeviri kalkar. Yeni replik için hazır çeviri varsa hemen gösterilir. Eski bir repliğin geç gelen yanıtı ekrana basılmaz.
 
-GTA 6 alt bölgesinde Tesseract önce dar altyazı alanını okur. Dar alan boşsa veya uzun bir satırın tamamını yakalayamadıysa daha geniş alanı da tarayabilir. Yol ve arka plan yazısı kontrolleri bu taramada da uygulanır.
+GTA 6 alt bölgesinde Tesseract, satırların harf kalınlığını, renkli yazı oranını ve tek tek kelimelerin okuma güvenini denetler. Filtre görev adlarından bağımsız çalışır. Tekrarlanan soru işaretleri veya bozuk karakterlerle dolu çeviriler gösterilmez. Hazır paket bozuk bir çeviri döndürürse seçili motor denenir.
 
 **0.2.1 ve üzeri kuruluysa** uygulamadaki **Güncelle** düğmesini kullanın. **0.2.0** kullanıcıları Replik-Guncelleme-x64-r1.exe dosyasıyla yükseltebilir. İlk kurulum için Replik-Kurulum-x64.exe dosyasını kullanın.
 

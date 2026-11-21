@@ -119,6 +119,9 @@ class GamePack:
 
 
 class Opus:
+    placeholder = re.compile(r"[\u2047\ufffd]|<unk>|(?<!\S)\?{2,}(?!\S)", re.IGNORECASE)
+    word = re.compile(r"[^\W\d_]+")
+
     def __init__(self):
         import ctranslate2
         import sentencepiece as sp
@@ -129,8 +132,22 @@ class Opus:
 
     def translate(self, text):
         pieces = self.source.encode(text, out_type=str) + ["</s>"]
-        output = self.engine.translate_batch([pieces], beam_size=1, max_decoding_length=256)
-        return self.target.decode(output[0].hypotheses[0]).strip()
+        limit = min(256, max(32, len(pieces) * 4))
+        output = self.engine.translate_batch([pieces], beam_size=1, max_decoding_length=limit)
+        result = self.target.decode(output[0].hypotheses[0]).strip()
+        words = len(self.word.findall(result))
+        damaged = not words or self.placeholder.search(result)
+        # Turkish is often shorter, so retry only when most of a longer input
+        # appears to have been omitted.
+        minimum = len(self.word.findall(text)) // 4
+        if not damaged and (minimum < 2 or words >= minimum):
+            return result
+        output = self.engine.translate_batch([pieces], beam_size=2, replace_unknowns=True, max_decoding_length=limit)
+        alternative = self.target.decode(output[0].hypotheses[0]).strip()
+        new_words = len(self.word.findall(alternative))
+        if new_words and not self.placeholder.search(alternative) and (damaged or new_words >= minimum):
+            return alternative
+        return result
 
 
 def serve(warm_model=False):

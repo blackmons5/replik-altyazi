@@ -2,6 +2,8 @@ GTA alt bölgesinde yeni İngilizce altyazı belirirken önceki Türkçe satır 
 
 Türkçe altyazı kutusu alt bölgeye biraz daha yaklaştırıldı. Çevirinin başında tek başına kalan `??` temizlenir. Birden fazla bozuk parça içeren satırlar elenir.
 
+Yerel model, bozuk simge içeren veya uzun bir İngilizce repliğe olağan dışı kısa yanıt veren satırlar için ikinci bir çeviri üretir. Geçerli ilk yanıtlar doğrudan gösterilir.
+
 Replik varsayılan olarak yerel OPUS-MT ile çevirir. Gemini isteğe bağlıdır. Gemini seçiliyken bağlantı kesilirse veya kullanılabilir bir yanıt zamanında gelmezse yerel model devreye girer.
 
 **Tanı günlüğünü aç** bağlantısı, pencere yakalama, OCR ve çeviri durumunu gösterir. Günlük bilgisayarda tutulur. İngilizce ve Türkçe altyazı metinleri, ekran görüntüleri ve API anahtarı günlüğe yazılmaz.

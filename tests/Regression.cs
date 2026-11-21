@@ -198,6 +198,7 @@ namespace Replik {
             Check(SubtitleText.CleanTranslation("Where?","Nereye ????")=="" && SubtitleText.CleanTranslation("Where?","G?rüşürüz.")=="","Reject isolated and embedded question placeholders");
             Check(SubtitleText.CleanTranslation("I know who you are.","?? Kim olduğunu biliyorum.")=="Kim olduğunu biliyorum.",
                 "Remove a leading placeholder without dropping a usable line");
+            Check(SubtitleText.CleanTranslation("Come inside.","⁇ İçeri gel.")=="İçeri gel.","Normalize the Unicode double question mark");
             Check(SubtitleText.CleanTranslation("I know.","?? ?? ?? Kim olduğunu biliyorum.")=="","Reject multiple placeholders");
             Check(SubtitleText.CleanTranslation("Really?","Gerçekten????")=="Gerçekten?" && SubtitleText.CleanTranslation("Why?","Neden? Ne oldu?!")=="Neden? Ne oldu?!","Preserve questions and their meaning");
             Check(!SubtitleText.SameLine("You must turn left at gate 2 tonight.","You must turn left at gate 3 tonight.",true),"Keep changed numbers");

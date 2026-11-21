@@ -66,7 +66,7 @@ namespace Replik {
         }
 
         static string CleanQuestions(string text) {
-            text=text.Replace('？','?');
+            text=text.Replace('？','?').Replace("⁇","??");
             if(BrokenQuestion.IsMatch(text)) return "";
             // Keep the question when repeated punctuation follows a complete word.
             return QuestionRun.Replace(text,"?");
@@ -89,7 +89,7 @@ namespace Replik {
         internal static string CleanTranslation(string source,string output) {
             if(string.IsNullOrWhiteSpace(output)) return "";
             // A lone placeholder before an otherwise valid sentence need not blank the caption.
-            output=LeadingPlaceholder.Replace(output.Replace('？','?'),"",1);
+            output=LeadingPlaceholder.Replace(output.Replace('？','?').Replace("⁇","??"),"",1);
             var candidate=RemoveRepeatedRows(CleanQuestions(output));
             if(string.IsNullOrWhiteSpace(candidate) || !candidate.Any(char.IsLetterOrDigit) ||
                 candidate.Length>Math.Min(680,Math.Max(96,source.Length*3+30))) return "";

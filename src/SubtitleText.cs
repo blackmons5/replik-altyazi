@@ -6,7 +6,8 @@ using System.Text.RegularExpressions;
 namespace Replik {
     static class SubtitleText {
         static readonly Regex Space=new Regex(@"\s+");
-        static readonly Regex UnknownWords=new Regex(@"\?{2,}");
+        static readonly Regex BrokenQuestion=new Regex(@"\uFFFD|(?<=[\p{L}\p{N}])\?+(?=[\p{L}\p{N}])|(?<!\S)\?(?:\s*\?)+|\?\s+\?");
+        static readonly Regex QuestionRun=new Regex(@"\?{2,}");
         static readonly Regex LeadingControl=new Regex(@"^(?:(?:\[[A-Z0-9]{1,5}\]|[B-HJ-Z0-9])\s+){1,3}(?=[A-Z][a-z])");
         static readonly Regex StraySymbols=new Regex(@"(?<!\S)(?:[?]{2,}|[=|<>@#]{2,})(?!\S)");
         static readonly Regex Word=new Regex(@"[\p{L}\p{N}]+");
@@ -34,6 +35,7 @@ namespace Replik {
 
         internal static string Clean(string line) {
             if(string.IsNullOrWhiteSpace(line)) return "";
+            line=CleanQuestions(line);
             var text=Space.Replace(line," ").Trim();
             if(StraySymbols.IsMatch(text)) return "";
             text=LeadingControl.Replace(text,"");
@@ -44,6 +46,13 @@ namespace Replik {
             int noise=words.Count(w=>(w.Length==1 && !"aAiI".Contains(w)) || w.All(char.IsDigit));
             if(!text.Any(char.IsLetter) || (words.Length>=3 && noise*2>=words.Length)) return "";
             return text;
+        }
+
+        static string CleanQuestions(string text) {
+            text=text.Replace('？','?');
+            if(BrokenQuestion.IsMatch(text)) return "";
+            // Keep the question when repeated punctuation follows a complete word.
+            return QuestionRun.Replace(text,"?");
         }
 
         static string Normalize(string text) {
@@ -61,9 +70,8 @@ namespace Replik {
             return string.Join(Environment.NewLine,rows);
         }
         internal static string CleanTranslation(string source,string output) {
-            if(string.IsNullOrWhiteSpace(output) || output.Contains("\uFFFD") || output.Contains("??????") ||
-                UnknownWords.Matches(output).Count>=3) return "";
-            var candidate=RemoveRepeatedRows(output);
+            if(string.IsNullOrWhiteSpace(output)) return "";
+            var candidate=RemoveRepeatedRows(CleanQuestions(output));
             if(string.IsNullOrWhiteSpace(candidate) || !candidate.Any(char.IsLetterOrDigit) ||
                 candidate.Length>Math.Min(680,Math.Max(96,source.Length*3+30))) return "";
             return candidate.Trim();
@@ -94,7 +102,11 @@ namespace Replik {
             int prefix=0,suffix=0;
             while(prefix<length && x[prefix]==y[prefix]) prefix++;
             while(suffix<length-prefix && x[x.Length-1-suffix]==y[y.Length-1-suffix]) suffix++;
-            if(allowFuzzy && length>=6 && prefix>=2 && suffix>=1 && Math.Max(x.Length,y.Length)-prefix-suffix<=1) return true;
+            // A different word can be a new cue even when the rest of the sentence is identical.
+            if(allowFuzzy && length>=6 && x.Length==y.Length && prefix>=2 && suffix>=1 && length-prefix-suffix==1) {
+                var u=x[prefix]; var v=y[prefix];
+                if(u.Length>=5 && u.Length==v.Length && u.Zip(v,(l,r)=>l==r?0:1).Sum()==1) return true;
+            }
             return allowGlyphs && x.Length==y.Length && prefix>=1 && suffix>=1 && length-prefix-suffix==1 &&
                 Math.Min(x[prefix].Length,y[prefix].Length)>=4 && FoldGlyphs(x[prefix])==FoldGlyphs(y[prefix]);
         }

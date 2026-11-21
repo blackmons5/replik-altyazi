@@ -1,6 +1,6 @@
-Replik her Türkçe çeviriyi ekrandaki İngilizce repliğe bağlar. OCR yeni bir repliği doğruladığında önceki çeviri kalkar. Yeni replik için hazır çeviri varsa hemen gösterilir. Eski bir repliğin geç gelen yanıtı ekrana basılmaz.
+GTA alt bölgesinde altyazı biçimini geçen, sonu noktalama işaretli ve yeterince net kısa replikler ilk karede çeviriye girebilir. Art arda aynı kalıpla söylenen, farklı kelimeler içeren replikleri ayırt etme iyileştirildi.
 
-GTA 6 alt bölgesinde Tesseract, satırların harf kalınlığını, renkli yazı oranını ve tek tek kelimelerin okuma güvenini denetler. Filtre görev adlarından bağımsız çalışır. Tekrarlanan soru işaretleri veya bozuk karakterlerle dolu çeviriler gösterilmez. Hazır paket bozuk bir çeviri döndürürse seçili motor denenir.
+Hazır GTA 6 paketinin araması artık yerel modelden bağımsız çalışır. Ekrandaki replik değişince OPUS-MT eski metni üretmeyi bırakır. Eksik kelime yerine çıkan `????` içeren satırlar elenir. Soru cümlesinin sonundaki tekrarlı soru işareti tek işaret olarak gösterilir.
 
 **0.2.1 ve üzeri kuruluysa** uygulamadaki **Güncelle** düğmesini kullanın. **0.2.0** kullanıcıları Replik-Guncelleme-x64-r1.exe dosyasıyla yükseltebilir. İlk kurulum için Replik-Kurulum-x64.exe dosyasını kullanın.
 

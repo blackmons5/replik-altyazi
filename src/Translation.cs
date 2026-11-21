@@ -197,16 +197,17 @@ namespace Replik {
         public async Task Run(CancellationToken token) {
             using (var reader=new Reader())
             using (var requests=CancellationTokenSource.CreateLinkedTokenSource(token))
-            using (var worker=new LocalTranslator(requests.Token)) {
+            using (var pack=new LocalTranslator(requests.Token,false))
+            using (var opus=local?new LocalTranslator(requests.Token,true):null) {
                 var clock=System.Diagnostics.Stopwatch.StartNew();
                 var dialogue=new Dialogue(async (text,cueToken)=>{
                     reading(text);
                     var began=clock.ElapsedMilliseconds;
                     using(var linked=CancellationTokenSource.CreateLinkedTokenSource(requests.Token,cueToken)) {
-                        var result=await worker.Read(text,local,linked.Token).ConfigureAwait(false);
+                        var result=await pack.Read(text,linked.Token).ConfigureAwait(false);
                         var translated=SubtitleText.CleanTranslation(text,result.text);
-                        if(translated.Length==0 && local && result.provider=="GTA 6 paketi") {
-                            result=await worker.Read(text,true,linked.Token,false).ConfigureAwait(false);
+                        if(translated.Length==0 && local) {
+                            result=await opus.Read(text,linked.Token).ConfigureAwait(false);
                             translated=SubtitleText.CleanTranslation(text,result.text);
                         }
                         if(!local && string.IsNullOrEmpty(translated)) {
@@ -236,7 +237,7 @@ namespace Replik {
                             }
                             if(active) {
                                 if(clock.ElapsedMilliseconds>=nextMeasure) {timings(sample.Millis,-1); nextMeasure=clock.ElapsedMilliseconds+500;}
-                                dialogue.Observe(sample.Text,sample.Confidence,clock.ElapsedMilliseconds);
+                                dialogue.Observe(sample.Text,sample.Confidence,clock.ElapsedMilliseconds,fraction==Desktop.Bands[0]);
                             }
                             // Pace only the next screen sample. Completed translations wake this loop independently.
                             frame=ReadFrame(reader,active?(int)Math.Max(0,33-sample.Millis):130,requests.Token);

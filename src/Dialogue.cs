@@ -36,7 +36,7 @@ namespace Replik {
             return SubtitleText.SameLine(text,cue.Text,adjacent && Math.Min(confidence,cue.Confidence)<.88f,adjacent)
                 || (adjacent && SubtitleText.IsClippedRead(text,cue.Text));
         }
-        internal void Observe(string text,float confidence,long now) {
+        internal void Observe(string text,float confidence,long now,bool gtaRow=false) {
             text=SubtitleText.Clean(text);
             if(text.Length==0 || confidence<.55f) {
                 uncertain="";
@@ -61,7 +61,8 @@ namespace Replik {
                 return;
             }
             // Confirm less certain changes on a second frame without delaying clear subtitles.
-            if(confidence<.85f && (now-uncertainSeen>350 || !SubtitleText.SameLine(text,uncertain,true,true))) {
+            bool completeGtaRow=gtaRow && confidence>=.76f && ".!?…".IndexOf(text[text.Length-1])>=0;
+            if(confidence<.85f && !completeGtaRow && (now-uncertainSeen>350 || !SubtitleText.SameLine(text,uncertain,true,true))) {
                 uncertain=text; uncertainSeen=now;
                 return;
             }

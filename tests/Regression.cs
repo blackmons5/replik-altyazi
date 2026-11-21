@@ -81,7 +81,22 @@ namespace Replik {
                 Check(reader.Read(crop,out score,true)=="Stay here.","Ignore a duplicated OCR row");
             }
         }
-        static void Main() {
+        static async Task WorkerPipes() {
+            using(var session=new CancellationTokenSource(TimeSpan.FromSeconds(90)))
+            using(var cue=CancellationTokenSource.CreateLinkedTokenSource(session.Token))
+            using(var pack=new LocalTranslator(session.Token,false))
+            using(var model=new LocalTranslator(session.Token,true)) {
+                var old=model.Read("We need to go back and tell everyone what happened.",cue.Token);
+                var ready=await pack.Read("Open the door.",session.Token);
+                Check(ready.provider=="GTA 6 paketi","Independent pack worker returned a lookup");
+                cue.Cancel();
+                try {await old;} catch(OperationCanceledException) {}
+                var current=await model.Read("Open the door.",session.Token);
+                Check(current.provider=="OPUS-MT" && current.text.ToLowerInvariant().Contains("kap"),"Model pipe stays aligned after cue cancellation");
+            }
+        }
+        static void Main(string[] args) {
+            if(Array.IndexOf(args,"--workers")>=0) WorkerPipes().GetAwaiter().GetResult();
             TranslationPath();
             WorldText();
             using(var reader=new Reader())
@@ -128,8 +143,20 @@ namespace Replik {
             Check(SubtitleText.Clean("I Know where we're going.")=="I Know where we're going.","Preserve pronouns");
             Check(SubtitleText.Clean("7 people came.")=="7 people came.","Preserve leading quantities");
             Check(SubtitleText.Clean("Move!")=="Move!","Preserve a short spoken line");
+            Check(SubtitleText.Clean("Wh????at happened?")=="" && SubtitleText.Clean("Take ???? now.")=="","Reject broken words before translation");
+            Check(SubtitleText.CleanTranslation("Where?","Nereye ????")=="" && SubtitleText.CleanTranslation("Where?","G?rüşürüz.")=="","Reject isolated and embedded question placeholders");
+            Check(SubtitleText.CleanTranslation("Really?","Gerçekten????")=="Gerçekten?" && SubtitleText.CleanTranslation("Why?","Neden? Ne oldu?!")=="Neden? Ne oldu?!","Preserve questions and their meaning");
             Check(!SubtitleText.SameLine("You must turn left at gate 2 tonight.","You must turn left at gate 3 tonight.",true),"Keep changed numbers");
             Check(!SubtitleText.SameLine("We can go back that way right now.","We can't go back that way right now.",true),"Keep changed negation");
+            var rapid=new Dialogue(s=>Task.FromResult(s));
+            rapid.Observe("Watch the front door this time!",.80f,0,true);
+            Check(rapid.Tick(0)=="Watch the front door this time!","A complete GTA line with verified strokes needs only one frame");
+            rapid.Observe("Watch the back door this time!",.81f,80,true);
+            Check(rapid.Tick(80)=="Watch the back door this time!","Keep rapid dialogue with one different word");
+            rapid.Observe("Close the",.80f,120,true);
+            Check(rapid.Tick(120)==null,"Keep incomplete lower-confidence OCR pending");
+            rapid.Observe("Close it!",.80f,165,false);
+            Check(rapid.Tick(165)==null,"Ungated screen text still needs confirmation");
             var recognized=new List<string>();
             var jitter=new Dialogue(s=>{recognized.Add(s); return Task.FromResult(s);});
             jitter.Observe("PHOTO STUDIO €] SELECT",.95f,0);

@@ -1,7 +1,7 @@
 [Setup]
 AppId=ReplikSubtitleTR
 AppName=Replik
-AppVersion=0.1.0
+AppVersion=0.1.1
 DefaultDirName={autopf}\Replik
 DefaultGroupName=Replik
 DisableProgramGroupPage=yes

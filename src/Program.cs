@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 using System.Net;
@@ -27,6 +28,7 @@ namespace Replik {
         readonly System.Windows.Forms.Timer positioning=new System.Windows.Forms.Timer { Interval=100 };
         static readonly RectangleF DefaultArea=new RectangleF(.14f,.72f,.72f,.20f);
         RectangleF fraction=DefaultArea;
+        readonly Dictionary<IntPtr,RectangleF> areas=new Dictionary<IntPtr,RectangleF>();
         CancellationTokenSource running;
         string caption="";
         Target target;
@@ -50,8 +52,8 @@ namespace Replik {
             start.FlatStyle=FlatStyle.Flat;
             Put(status,197,347,308,65); status.TextAlign=ContentAlignment.MiddleLeft;
             refresh.Click+=delegate { Reload(); };
-            windows.SelectedIndexChanged+=delegate { fraction=DefaultArea; pick.Text="Altyazı alanını çiz  •  Varsayılan: alt orta"; };
-            pick.Click+=delegate { SelectArea(); };
+            windows.SelectedIndexChanged+=delegate { LoadArea(); };
+            pick.Click+=async delegate { await SelectArea(); };
             start.Click+=async delegate { await Toggle(); };
             positioning.Tick+=delegate { PositionCaption(); };
             FormClosing+=delegate { closing=true; if (running!=null) running.Cancel(); positioning.Stop(); overlay.Hide(); };
@@ -61,20 +63,45 @@ namespace Replik {
         void Put(Control c,int x,int y,int w,int h) { c.SetBounds(x,y,w,h); Controls.Add(c); }
         Label LabelAt(string text,int x,int y,int w,int h) { var l=new Label {Text=text}; Put(l,x,y,w,h); return l; }
         void Reload() {
+            var previous=windows.SelectedItem as Target;
             var choices=Desktop.Windows();
             windows.DataSource=choices;
             var remote=choices.FirstOrDefault(t=>t.Title.IndexOf("Remote Play",StringComparison.OrdinalIgnoreCase)>=0);
-            if (remote!=null) windows.SelectedItem=remote;
+            var selected=choices.FirstOrDefault(t=>previous!=null && t.Handle==previous.Handle) ?? remote;
+            if (selected!=null) windows.SelectedItem=selected;
+            LoadArea();
         }
-        void SelectArea() {
+        void LoadArea() {
+            var t=windows.SelectedItem as Target;
+            bool saved=t!=null && areas.TryGetValue(t.Handle,out fraction);
+            if (!saved) fraction=DefaultArea;
+            pick.Text=saved?"Altyazı alanını düzenle":"Altyazı alanını çiz  •  Varsayılan: alt orta";
+        }
+        async Task SelectArea() {
             var t=windows.SelectedItem as Target;
             if (t==null || Desktop.IsIconic(t.Handle) || !Desktop.IsWindow(t.Handle)) { status.Text="Oyun penceresini aç ve listeyi yenile."; return; }
-            Desktop.SetForegroundWindow(t.Handle);
-            if (Desktop.GetForegroundWindow()!=t.Handle) { status.Text="Oyun penceresini görünür yap ve tekrar seç."; return; }
-            using (var selector=new Picker(Desktop.Bounds(t.Handle))) {
-                if (selector.ShowDialog()==DialogResult.OK) { fraction=selector.Fraction; pick.Text="Altyazı alanını yeniden çiz"; }
+            start.Enabled=pick.Enabled=refresh.Enabled=windows.Enabled=false;
+            try {
+                Desktop.SetForegroundWindow(t.Handle);
+                await Task.Delay(180);
+                for (int i=0;!closing && i<12 && Desktop.GetForegroundWindow()!=t.Handle;i++) await Task.Delay(80);
+                if (closing) return;
+                var bounds=Desktop.Bounds(t.Handle);
+                if (Desktop.GetForegroundWindow()!=t.Handle || bounds.Width<60 || bounds.Height<12) {
+                    status.Text="Oyun penceresini görünür yap ve tekrar seç."; return;
+                }
+                using (var frame=Desktop.Capture(bounds))
+                using (var selector=new Picker(frame,fraction)) {
+                    Activate();
+                    if (selector.ShowDialog(this)==DialogResult.OK) {
+                        areas[t.Handle]=selector.Fraction; LoadArea(); status.Text="Altyazı alanı güncellendi.";
+                    }
+                }
+            } catch (System.ComponentModel.Win32Exception) {
+                status.Text="Oyun görüntüsü alınamadı. Pencereyi görünür yap ve yeniden dene.";
+            } finally {
+                if (!closing) start.Enabled=pick.Enabled=refresh.Enabled=windows.Enabled=true;
             }
-            Activate();
         }
         void PositionCaption() {
             if (target==null || Desktop.GetForegroundWindow()!=target.Handle || Desktop.IsIconic(target.Handle)) { overlay.Hide(); return; }

@@ -50,8 +50,8 @@ namespace Replik {
             return new Rectangle(origin.X, origin.Y, r.Right-r.Left, r.Bottom-r.Top);
         }
         internal static Rectangle Pixels(Rectangle bounds, RectangleF fraction) {
-            var region = new Rectangle(bounds.X+(int)(bounds.Width*fraction.X), bounds.Y+(int)(bounds.Height*fraction.Y),
-                Math.Max(1,(int)(bounds.Width*fraction.Width)), Math.Max(1,(int)(bounds.Height*fraction.Height)));
+            var region = Rectangle.FromLTRB(bounds.X+(int)Math.Round(bounds.Width*fraction.Left),bounds.Y+(int)Math.Round(bounds.Height*fraction.Top),
+                bounds.X+(int)Math.Round(bounds.Width*fraction.Right),bounds.Y+(int)Math.Round(bounds.Height*fraction.Bottom));
             return Rectangle.Intersect(bounds, region);
         }
         internal static Bitmap Capture(Rectangle area) {
@@ -63,78 +63,4 @@ namespace Replik {
         }
     }
 
-    sealed class Picker : Form {
-        readonly Rectangle area;
-        Point start;
-        Rectangle selection;
-        bool dragging;
-        internal RectangleF Fraction;
-        internal Picker(Rectangle bounds) {
-            area = bounds;
-            Text = "Altyazı alanını seç";
-            FormBorderStyle = FormBorderStyle.None;
-            StartPosition = FormStartPosition.Manual;
-            Bounds = bounds;
-            BackColor = Color.Black;
-            Opacity = 0.48;
-            DoubleBuffered = true;
-            TopMost = true;
-            ShowInTaskbar = false;
-            Cursor = Cursors.Cross;
-            KeyPreview = true;
-            KeyDown += delegate(object s, KeyEventArgs e) { if (e.KeyCode == Keys.Escape) DialogResult = DialogResult.Cancel; };
-        }
-        protected override void OnPaint(PaintEventArgs e) {
-            base.OnPaint(e);
-            TextRenderer.DrawText(e.Graphics, "İngilizce altyazıyı çevreleyecek bir dikdörtgen çiz.   Esc • İptal", Font,
-                new Point(14,14), Color.White);
-            if (dragging) { using (var pen = new Pen(Color.Aqua, 4)) e.Graphics.DrawRectangle(pen,selection); }
-        }
-        protected override void OnMouseDown(MouseEventArgs e) {
-            if (e.Button != MouseButtons.Left) return;
-            dragging=true; Capture=true; start=e.Location; selection=Rectangle.Empty; Invalidate();
-        }
-        protected override void OnMouseMove(MouseEventArgs e) {
-            if (!dragging) return;
-            var p = new Point(Math.Max(0,Math.Min(area.Width,e.X)),Math.Max(0,Math.Min(area.Height,e.Y)));
-            selection=Rectangle.FromLTRB(Math.Min(start.X,p.X),Math.Min(start.Y,p.Y),Math.Max(start.X,p.X),Math.Max(start.Y,p.Y));
-            Invalidate();
-        }
-        protected override void OnMouseUp(MouseEventArgs e) {
-            if (!dragging) return;
-            OnMouseMove(e); dragging=false; Capture=false;
-            if (selection.Width < 60 || selection.Height < 12) { Invalidate(); return; }
-            Fraction=new RectangleF((float)selection.X/area.Width,(float)selection.Y/area.Height,
-                (float)selection.Width/area.Width,(float)selection.Height/area.Height);
-            DialogResult=DialogResult.OK;
-        }
-    }
-
-    sealed class Caption : Form {
-        string line="";
-        readonly Font captionFont = new Font("Segoe UI", 19, FontStyle.Bold);
-        public Caption() {
-            FormBorderStyle=FormBorderStyle.None; ShowInTaskbar=false; TopMost=true;
-            StartPosition=FormStartPosition.Manual; BackColor=Color.FromArgb(20,22,27); Opacity=0.94; DoubleBuffered=true;
-        }
-        protected override bool ShowWithoutActivation { get { return true; } }
-        protected override CreateParams CreateParams { get { var p=base.CreateParams; p.ExStyle|=0x08000000|0x80000|0x20|0x80; return p; } }
-        const TextFormatFlags Flags=TextFormatFlags.WordBreak|TextFormatFlags.HorizontalCenter|TextFormatFlags.VerticalCenter|TextFormatFlags.NoPrefix;
-        internal void Place(string text, Rectangle window, Rectangle readArea) {
-            if (text.Length==0 || window.Width<160) { Hide(); return; }
-            int width=Math.Max(150,(int)(window.Width*0.86));
-            int height=TextRenderer.MeasureText(text,captionFont,new Size(width-24,1000),Flags).Height+14;
-            int y=readArea.Top-height-6;
-            if (y<window.Top) y=readArea.Bottom+6;
-            if (y+height>window.Bottom) { Hide(); return; }
-            Bounds=new Rectangle(window.Left+(window.Width-width)/2,y,width,height);
-            if (line!=text) {line=text; Invalidate();}
-            if (!Visible) Show();
-        }
-        protected override void OnPaint(PaintEventArgs e) {
-            var box=ClientRectangle; box.Inflate(-10,-4);
-            TextRenderer.DrawText(e.Graphics,line,captionFont,box,Color.White,Flags);
-        }
-        protected override void Dispose(bool disposing) { if (disposing) captionFont.Dispose(); base.Dispose(disposing); }
-    }
 }

@@ -17,6 +17,8 @@ using Tesseract;
 namespace Replik {
     sealed class Reader : IDisposable {
         readonly TesseractEngine engine;
+        WindowsReader windows;
+        long nextWindowsRead;
         ulong fingerprint;
         Size lastSize;
         string lastText="";
@@ -42,6 +44,7 @@ namespace Replik {
         public Reader() {
             engine=new TesseractEngine(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"tessdata"),"eng",EngineMode.LstmOnly);
             engine.SetVariable("user_defined_dpi","180");
+            windows=WindowsReader.OpenEnglish();
         }
         internal string Read(Bitmap source,out float confidence,bool gtaMode=false) {
             var signature=Sample(source);
@@ -76,14 +79,28 @@ namespace Replik {
             var processed=new SubtitleImage(source);
             string text;
             using(var image=processed.ToBitmap(gtaMode)) text=ReadText(image,gtaMode?processed:null,out confidence);
-            if(confidence>=.78f || fallbackClock.ElapsedMilliseconds<nextFallback) return text;
-            float alternativeScore;
-            string alternative;
-            using(var image=processed.ToBitmap(!gtaMode)) alternative=ReadText(image,gtaMode?processed:null,out alternativeScore);
-            nextFallback=fallbackClock.ElapsedMilliseconds+180;
-            if(alternativeScore<=confidence || alternative.Length==0) return text;
-            confidence=alternativeScore;
-            return alternative;
+            if(confidence<.78f && fallbackClock.ElapsedMilliseconds>=nextFallback) {
+                float alternativeScore;
+                using(var image=processed.ToBitmap(!gtaMode)) {
+                    string alternative=ReadText(image,gtaMode?processed:null,out alternativeScore);
+                    if(alternativeScore>confidence && alternative.Length>0) {confidence=alternativeScore; text=alternative;}
+                }
+                nextFallback=fallbackClock.ElapsedMilliseconds+180;
+            }
+            if(gtaMode && windows!=null && confidence<.85f && text.Length<=32 && fallbackClock.ElapsedMilliseconds>=nextWindowsRead) {
+                try {
+                    string second=windows.ReadShort(source,processed);
+                    nextWindowsRead=fallbackClock.ElapsedMilliseconds+(second.Length==0?140:0);
+                    if(second.Length>0) {
+                        // An independent match can dispatch immediately. A Windows-only
+                        // rescue needs a second frame because this API has no confidence score.
+                        confidence=SubtitleText.SameLine(text,second,false) ? .95f : .74f;
+                        return second;
+                    }
+                } catch(System.Runtime.InteropServices.COMException) {windows=null;}
+                  catch(UnauthorizedAccessException) {windows=null;}
+            }
+            return text;
         }
         sealed class Row {
             internal Rectangle Bounds;
@@ -97,12 +114,15 @@ namespace Replik {
             if(SubtitleText.IsWorldLabel(line) || !iterator.TryGetBoundingBox(level,out bounds) ||
                 !iterator.TryGetBaseline(level,out baseline)) return false;
             box=new Rectangle(bounds.X1,bounds.Y1,bounds.Width,bounds.Height);
+            return Math.Abs(baseline.Height)<=Math.Max(2,baseline.Width*.018) && HasSubtitleShape(image,box);
+        }
+        internal static bool HasSubtitleShape(SubtitleImage image,Rectangle box) {
             double centerX=(box.Left+box.Width*.5)/image.Size.Width;
             double centerY=(box.Top+box.Height*.5)/image.Size.Height;
             double height=(double)box.Height/image.Size.Height;
             return centerX>=.36 && centerX<=.64 && centerY>=.12 && centerY<=.87 &&
                 height>=.065 && height<=.29 &&
-                Math.Abs(baseline.Height)<=Math.Max(2,baseline.Width*.018) && image.HasSubtitleStrokes(box);
+                image.HasSubtitleStrokes(box);
         }
         static IEnumerable<Row> SubtitleRows(List<Row> rows,int height) {
             var main=rows.OrderBy(r=>Math.Abs(r.Bounds.Top+r.Bounds.Height*.5-height*.53)/height-.12*r.Confidence).First();

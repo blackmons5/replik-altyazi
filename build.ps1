@@ -52,7 +52,8 @@ $version=(Get-Content version.txt -Raw).Trim()
 if ($version -notmatch '^\d+\.\d+\.\d+$') { throw 'Invalid version' }
 Set-Content build/ReleaseVersion.cs -Encoding ascii -Value ('[assembly: System.Reflection.AssemblyVersion("' + $version + '.0")]')
 $sources+= (Resolve-Path build/ReleaseVersion.cs).Path
-& $csc /nologo /codepage:65001 /target:winexe /platform:x64 /optimize+ /out:build/app/Replik.exe /r:build/app/Tesseract.dll /r:System.Drawing.dll /r:System.Windows.Forms.dll /r:System.Net.Http.dll /r:System.Web.Extensions.dll $sources
+$ocrRefs = & ./windows-ocr-references.ps1
+& $csc /nologo /codepage:65001 /target:winexe /platform:x64 /optimize+ /out:build/app/Replik.exe /r:build/app/Tesseract.dll /r:System.Drawing.dll /r:System.Windows.Forms.dll /r:System.Net.Http.dll /r:System.Web.Extensions.dll $ocrRefs $sources
 if ($LASTEXITCODE) { throw 'C# compilation failed' }
 & $Compiler "/DAppVer=$version" setup.iss
 if ($LASTEXITCODE) { throw 'Installer compilation failed' }

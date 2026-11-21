@@ -28,7 +28,8 @@ jobs:
           if ($LASTEXITCODE) {throw 'Offline engine or pack test failed'}
           $sources=(Get-Item src/*.cs,tests/Regression.cs).FullName
           $csc=Join-Path $env:WINDIR 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
-          & $csc /nologo /codepage:65001 /platform:x64 /target:exe /main:Replik.Regression /out:build/app/test.exe /r:build/app/Tesseract.dll /r:System.Drawing.dll /r:System.Windows.Forms.dll /r:System.Net.Http.dll /r:System.Web.Extensions.dll $sources
+          $ocrRefs = & ./windows-ocr-references.ps1
+          & $csc /nologo /codepage:65001 /platform:x64 /target:exe /main:Replik.Regression /out:build/app/test.exe /r:build/app/Tesseract.dll /r:System.Drawing.dll /r:System.Windows.Forms.dll /r:System.Net.Http.dll /r:System.Web.Extensions.dll $ocrRefs $sources
           if ($LASTEXITCODE) {throw 'Test build failed'}
           & ./build/app/test.exe --workers
           if ($LASTEXITCODE) {throw 'Regression tests failed'}
@@ -62,8 +63,17 @@ jobs:
           if ((Get-FileHash "$dir/Replik.exe").Hash -ne (Get-FileHash build/app/Replik.exe).Hash) {throw 'Program not updated'}
           if ((Get-Item $model.FullName).LastWriteTimeUtc -ne $stamp) {throw 'Existing model was replaced'}
           if ((Get-FileHash "$dir/local/translate.py").Hash -ne (Get-FileHash build/app/local/translate.py).Hash) {throw 'Worker not updated'}
+          $probe=Start-Process "$dir/Replik.exe" -ArgumentList '--check-windows-ocr' -Wait -PassThru -WindowStyle Hidden
+          if ($probe.ExitCode) {throw 'English Windows OCR unavailable after update'}
+          & ./build/app/test.exe --windows-ocr
+          if ($LASTEXITCODE) {throw 'Windows OCR recognition failed'}
           & "$dir/InstalledCaption.exe"
           if ($LASTEXITCODE) {throw 'Installed OCR to Turkish caption failed'}
+          $fresh=Join-Path $env:RUNNER_TEMP 'Fresh Replik'
+          $p=Start-Process (Get-Item dist/Replik-Kurulum-x64.exe).FullName -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',('/DIR="'+$fresh+'"')) -WindowStyle Hidden -Wait -PassThru
+          if ($p.ExitCode) {throw 'Full installation failed'}
+          $probe=Start-Process "$fresh/Replik.exe" -ArgumentList '--check-windows-ocr' -Wait -PassThru -WindowStyle Hidden
+          if ($probe.ExitCode) {throw 'English Windows OCR unavailable after full installation'}
       - name: Publish verified installer
         env:
           GH_TOKEN: ${{ github.token }}

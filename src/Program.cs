@@ -11,7 +11,11 @@ using System.Windows.Forms;
 
 namespace Replik {
     static class Program {
-        [STAThread] static void Main() {
+        [STAThread] static void Main(string[] args) {
+            if(args.Length==1 && args[0]=="--check-windows-ocr") {
+                Environment.ExitCode=WindowsReader.OpenEnglish()==null?1:0;
+                return;
+            }
             Desktop.SetProcessDpiAwarenessContext(new IntPtr(-4));
             Environment.SetEnvironmentVariable("OMP_THREAD_LIMIT","1");
             ServicePointManager.SecurityProtocol=SecurityProtocolType.Tls12;

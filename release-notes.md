@@ -1,6 +1,6 @@
-OCR aynı İngilizce repliği kısa süre okuyamadığında, ekrandaki Türkçe altyazı yarım saniyeye kadar görünür kalır. Yeni bir replik doğrulandığı anda önceki altyazı kalkar.
+Tam kurulum ve küçük güncelleme, oyuncunun bilgisayarında İngilizce Windows OCR motorunu kontrol eder. Eksikse Windows Update üzerinden indirip kurar. Bu işlem birkaç dakika sürebilir. Windows Update kullanılamıyorsa paketteki Tesseract ile çeviri çalışır.
 
-GTA alt bölgesinde tek karede beliren, okuması belirsiz ve noktalamasız bir parça, mevcut repliğin yerini almadan önce ikinci okumada doğrulanır. Harflere karışmış yoğun simge dizileri hem okunan İngilizcede hem de Türkçe yanıtta süzülür.
+GTA için **Alt** konumunda Tesseract kısa bir satırı okuyamadığında veya düşük güvenle okuduğunda, Replik büyütülmüş görüntüyü İngilizce Windows OCR ile de okur. İkinci okuyucu aynı altyazı konumu ve yazı biçimi filtrelerini kullanır.
 
 **0.2.1 ve üzeri kuruluysa** uygulamadaki **Güncelle** düğmesini kullanın. **0.2.0** kullanıcıları Replik-Guncelleme-x64-r1.exe dosyasıyla yükseltebilir. İlk kurulum için Replik-Kurulum-x64.exe dosyasını kullanın.
 

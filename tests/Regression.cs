@@ -91,6 +91,23 @@ namespace Replik {
             }
         }
         static void Main(string[] args) {
+            if(Array.IndexOf(args,"--windows-ocr")>=0) {
+                var windows=WindowsReader.OpenEnglish();
+                Check(windows!=null,"Installed English Windows OCR engine");
+                using(var crop=new Bitmap(600,76))
+                using(var g=Graphics.FromImage(crop))
+                using(var font=new Font("Segoe UI",16,GraphicsUnit.Pixel))
+                using(var fmt=new StringFormat {Alignment=StringAlignment.Center}) {
+                    g.Clear(Color.FromArgb(38,42,48));
+                    g.DrawString("Wait",font,Brushes.White,300,27,fmt);
+                    var actual=windows.ReadShort(crop,new SubtitleImage(crop));
+                    Check(actual=="Wait","Windows OCR reads the centered short subtitle: "+actual);
+                    g.Clear(Color.FromArgb(38,42,48));
+                    g.DrawString("BUS LANE",font,Brushes.White,300,27,fmt);
+                    Check(windows.ReadShort(crop,new SubtitleImage(crop))=="","Windows OCR rejects road labels");
+                }
+                Console.WriteLine("English Windows OCR read Wait and rejected the road label.");
+            }
             if(Array.IndexOf(args,"--workers")>=0) WorkerPipes().GetAwaiter().GetResult();
             TranslationPath();
             WorldText();

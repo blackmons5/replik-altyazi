@@ -24,6 +24,7 @@ Compression=lzma2/fast
 SolidCompression=yes
 UninstallDisplayIcon={app}\Replik.exe
 WizardStyle=modern
+PrivilegesRequired=admin
 
 [Languages]
 Name: "turkish"; MessagesFile: "compiler:Languages\Turkish.isl"
@@ -43,12 +44,37 @@ Source: "build\inputs\VC_redist.x64.exe"; DestDir: "{tmp}"; Flags: dontcopy
 Name: "{group}\Replik"; Filename: "{app}\Replik.exe"
 
 [Run]
+Filename: "{sys}\dism.exe"; Parameters: "/Online /Add-Capability /CapabilityName:Language.OCR~~~en-US~0.0.1.0 /Quiet /NoRestart"; StatusMsg: "Bu bilgisayarda İngilizce Windows OCR hazırlanıyor. Windows Update birkaç dakika sürebilir…"; Check: NeedsEnglishOcr; AfterInstall: CheckEnglishOcrResult; Flags: runhidden waituntilterminated
 #ifndef Patch
 Filename: "{app}\local\python.exe"; Parameters: "-B translate.py --sync-pack"; WorkingDir: "{app}\local"; StatusMsg: "CouchSubs GTA 6 paketi kontrol ediliyor…"; Flags: runhidden runasoriginaluser waituntilterminated
 #endif
 Filename: "{app}\Replik.exe"; Description: "Replik uygulamasını aç"; Flags: postinstall nowait skipifsilent unchecked
 
 [Code]
+function HasEnglishOcr: Boolean;
+var
+  Code: Integer;
+begin
+  Result := Exec(ExpandConstant('{app}\Replik.exe'), '--check-windows-ocr', ExpandConstant('{app}'),
+    SW_HIDE, ewWaitUntilTerminated, Code) and (Code = 0);
+end;
+
+function NeedsEnglishOcr: Boolean;
+begin
+  Result := not HasEnglishOcr;
+  if Result then Log('Requesting English OCR from Windows servicing')
+  else Log('English Windows OCR is already available');
+end;
+
+procedure CheckEnglishOcrResult;
+begin
+  if HasEnglishOcr then Log('English Windows OCR is available after setup')
+  else begin
+    Log('English Windows OCR unavailable after servicing; bundled Tesseract is active');
+    SuppressibleMsgBox('İngilizce Windows OCR şu anda kullanılamıyor. Replik, kurulumdaki Tesseract ile çalışacak. Windows Update erişimi sağlandığında kurulumu yeniden çalıştırabilirsiniz.', mbInformation, MB_OK, IDOK);
+  end;
+end;
+
 #ifdef Patch
 const RegPath = 'SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\ReplikSubtitleTR_is1';
 function InstalledDir(Param: String): String;

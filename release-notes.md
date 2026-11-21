@@ -1,3 +1,7 @@
+GTA alt bölgesinde bir OCR karesi yavaş okunduğunda, Replik ek Tesseract okumalarını sınırlar. Geniş alan gerekiyorsa sonraki karede denenir. İngilizce Windows OCR kullanılabiliyorsa yavaş kareden sonra birkaç kareyi önce o okur.
+
+Tanı günlüğü artık görüntü boyutunu, OCR geçiş sayılarını ve bir repliğin çeviriye gönderildiği anı kaydeder.
+
 GTA alt bölgesinde yeni İngilizce altyazı belirirken önceki Türkçe satır daha erken gizlenir. Tesseract’ın emin olamadığı uzun diyalogları da Windows OCR ikinci kez okuyabilir.
 
 Türkçe altyazı kutusu alt bölgeye biraz daha yaklaştırıldı. Çevirinin başında tek başına kalan `??` temizlenir. Birden fazla bozuk parça içeren satırlar elenir.

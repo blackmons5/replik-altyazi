@@ -16,6 +16,7 @@ using Tesseract;
 
 namespace Replik {
     sealed class Reader : IDisposable {
+        readonly int slowFrameMs;
         readonly TesseractEngine engine;
         WindowsReader windows;
         long nextWindowsRead;
@@ -33,6 +34,10 @@ namespace Replik {
         string wideText="";
         float wideConfidence;
         int wideReused;
+        int fastFrames;
+        bool wideNextFrame;
+        internal int LastTesseractPasses {get;private set;}
+        internal int LastWindowsPasses {get;private set;}
         static ulong Sample(Bitmap image) {
             ulong hash=14695981039346656037UL;
             // Sparse samples detect static frames; periodically do a full read even on a match.
@@ -41,27 +46,75 @@ namespace Replik {
                     hash=unchecked((hash^(uint)image.GetPixel(x,y).ToArgb())*1099511628211UL);
             return hash;
         }
-        public Reader() {
+        public Reader(int slowFrameMs=160,bool useWindows=true) {
+            this.slowFrameMs=slowFrameMs;
             engine=new TesseractEngine(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"tessdata"),"eng",EngineMode.LstmOnly);
             engine.SetVariable("user_defined_dpi","180");
-            windows=WindowsReader.OpenEnglish();
+            windows=useWindows?WindowsReader.OpenEnglish():null;
         }
         internal string Read(Bitmap source,out float confidence,bool gtaMode=false) {
+            ResetPassCounts();
+            return ReadPrimary(source,out confidence,gtaMode,false);
+        }
+        string ReadPrimary(Bitmap source,out float confidence,bool gtaMode,bool windowsAlreadyTried) {
             var signature=Sample(source);
             if(signature==fingerprint && source.Size==lastSize && gtaMode==lastGtaMode && reused<2) {
                 reused++; confidence=lastConfidence; return lastText;
             }
             fingerprint=signature; lastSize=source.Size; lastGtaMode=gtaMode; reused=0;
-            lastText=Recognize(source,gtaMode,out lastConfidence); confidence=lastConfidence; return lastText;
+            lastText=Recognize(source,gtaMode,out lastConfidence,windowsAlreadyTried);
+            confidence=lastConfidence;
+            return lastText;
         }
         internal string ReadGta(Bitmap source,Rectangle tight,out float confidence) {
+            ResetPassCounts();
+            var frame=Stopwatch.StartNew();
+            try {return ReadGtaFrame(source,tight,frame,out confidence);}
+            finally {
+                if(frame.ElapsedMilliseconds>=slowFrameMs && LastTesseractPasses>0 && windows!=null) fastFrames=2;
+            }
+        }
+        void ResetPassCounts() {LastTesseractPasses=LastWindowsPasses=0;}
+        string ReadGtaFrame(Bitmap source,Rectangle tight,Stopwatch frame,out float confidence) {
             string text;
-            using(var crop=source.Clone(tight,System.Drawing.Imaging.PixelFormat.Format24bppRgb)) text=Read(crop,out confidence,true);
+            bool triedWindows=fastFrames>0 && windows!=null;
+            using(var crop=source.Clone(tight,System.Drawing.Imaging.PixelFormat.Format24bppRgb)) {
+                if(triedWindows) {
+                    fastFrames--;
+                    string fast=TryWindows(crop,new SubtitleImage(crop));
+                    if(fast.Length>0) {
+                        confidence=.74f;
+                        return fast;
+                    }
+                }
+                if(wideNextFrame && fallbackClock.ElapsedMilliseconds>=nextWideRead) {
+                    wideNextFrame=false;
+                    string deferred=ReadWide(source,out confidence);
+                    if(confidence>=.85f) return deferred;
+                    confidence=0;
+                    return "";
+                }
+                text=ReadPrimary(crop,out confidence,true,triedWindows);
+            }
             if(text.Length>0 && text.Length<32) return text;
+            if(text.Length==0 && frame.ElapsedMilliseconds>=slowFrameMs) {
+                wideNextFrame=true;
+                return text;
+            }
 
+            float rescueConfidence;
+            string rescue=ReadWide(source,out rescueConfidence);
+            if(rescueConfidence>=.85f && (text.Length==0 || SubtitleText.IsClippedRead(text,rescue,false))) {
+                confidence=rescueConfidence;
+                return rescue;
+            }
+            return text;
+        }
+        string ReadWide(Bitmap source,out float confidence) {
+            confidence=0;
             var signature=Sample(source);
             if(signature!=wideFingerprint || source.Size!=wideSize || wideReused>=2) {
-                if(fallbackClock.ElapsedMilliseconds<nextWideRead) return text;
+                if(fallbackClock.ElapsedMilliseconds<nextWideRead) return "";
                 var image=new SubtitleImage(source);
                 using(var mask=image.ToBitmap(true)) wideText=ReadText(mask,image,out wideConfidence);
                 nextWideRead=fallbackClock.ElapsedMilliseconds+160;
@@ -69,17 +122,15 @@ namespace Replik {
                 wideSize=source.Size;
                 wideReused=0;
             } else wideReused++;
-            if(wideConfidence>=.85f && (text.Length==0 || SubtitleText.IsClippedRead(text,wideText,false))) {
-                confidence=wideConfidence;
-                return wideText;
-            }
-            return text;
+            confidence=wideConfidence;
+            return wideText;
         }
-        string Recognize(Bitmap source,bool gtaMode,out float confidence) {
+        string Recognize(Bitmap source,bool gtaMode,out float confidence,bool windowsAlreadyTried) {
+            var read=Stopwatch.StartNew();
             var processed=new SubtitleImage(source);
             string text;
             using(var image=processed.ToBitmap(gtaMode)) text=ReadText(image,gtaMode?processed:null,out confidence);
-            if(confidence<.78f && fallbackClock.ElapsedMilliseconds>=nextFallback) {
+            if(confidence<.78f && read.ElapsedMilliseconds<slowFrameMs && fallbackClock.ElapsedMilliseconds>=nextFallback) {
                 float alternativeScore;
                 using(var image=processed.ToBitmap(!gtaMode)) {
                     string alternative=ReadText(image,gtaMode?processed:null,out alternativeScore);
@@ -87,21 +138,25 @@ namespace Replik {
                 }
                 nextFallback=fallbackClock.ElapsedMilliseconds+180;
             }
-            if(gtaMode && windows!=null && confidence<.85f && text.Length<=150 && fallbackClock.ElapsedMilliseconds>=nextWindowsRead) {
-                try {
-                    string second=windows.ReadLine(source,processed);
-                    nextWindowsRead=fallbackClock.ElapsedMilliseconds+(second.Length==0?140:0);
-                    bool agrees=SubtitleText.SameLine(text,second,false);
-                    if(second.Length>0 && (agrees || text.Length<=32 || SubtitleText.IsClippedRead(text,second,false))) {
-                        // An independent match can dispatch immediately. A Windows-only
-                        // rescue needs a second frame because this API has no confidence score.
-                        confidence=agrees ? .95f : .74f;
-                        return second;
-                    }
-                } catch(System.Runtime.InteropServices.COMException) {windows=null;}
-                  catch(UnauthorizedAccessException) {windows=null;}
+            if(gtaMode && !windowsAlreadyTried && windows!=null && confidence<.85f && text.Length<=150 &&
+                fallbackClock.ElapsedMilliseconds>=nextWindowsRead) {
+                string second=TryWindows(source,processed);
+                nextWindowsRead=fallbackClock.ElapsedMilliseconds+(second.Length==0?140:0);
+                bool agrees=SubtitleText.SameLine(text,second,false);
+                if(second.Length>0 && (agrees || text.Length<=32 || SubtitleText.IsClippedRead(text,second,false))) {
+                    // Windows-only results still require confirmation in Dialogue.
+                    confidence=agrees ? .95f : .74f;
+                    return second;
+                }
             }
             return text;
+        }
+        string TryWindows(Bitmap source,SubtitleImage processed) {
+            LastWindowsPasses++;
+            try {return windows.ReadLine(source,processed);}
+            catch(System.Runtime.InteropServices.COMException) {windows=null;}
+            catch(UnauthorizedAccessException) {windows=null;}
+            return "";
         }
         sealed class Row {
             internal Rectangle Bounds;
@@ -146,6 +201,7 @@ namespace Replik {
             return wordCount>0 && reliable*3>=wordCount*2;
         }
         string ReadText(Bitmap image,SubtitleImage gta,out float confidence) {
+            LastTesseractPasses++;
             using (var pix=PixConverter.ToPix(image))
             using (var page=engine.Process(pix,PageSegMode.SingleBlock))
             using (var iterator=page.GetIterator()) {
@@ -268,6 +324,7 @@ namespace Replik {
                     async (text,ct)=>(await worker.Read(text,true,ct,false).ConfigureAwait(false)).text);
                 var dialogue=new Dialogue(async (text,cueToken)=>{
                     reading(text);
+                    DiagnosticsLog.Local.Write("ocr.accepted");
                     var began=clock.ElapsedMilliseconds;
                     using(var linked=CancellationTokenSource.CreateLinkedTokenSource(requests.Token,cueToken)) {
                         string translated="";
@@ -318,8 +375,9 @@ namespace Replik {
                             if(active) {
                                 if(clock.ElapsedMilliseconds>=nextMeasure) {
                                     timings(sample.Millis,-1);
-                                    DiagnosticsLog.Local.Write("ocr.sample","has_text={0} confidence={1:F2} elapsed_ms={2}",
-                                        !string.IsNullOrEmpty(sample.Text),sample.Confidence,sample.Millis);
+                                    DiagnosticsLog.Local.Write("ocr.sample","has_text={0} confidence={1:F2} elapsed_ms={2} tesseract_passes={3} windows_passes={4} crop={5}x{6}",
+                                        !string.IsNullOrEmpty(sample.Text),sample.Confidence,sample.Millis,
+                                        sample.TesseractPasses,sample.WindowsPasses,sample.CropSize.Width,sample.CropSize.Height);
                                     nextMeasure=clock.ElapsedMilliseconds+1000;
                                 }
                                 dialogue.Observe(sample.Text,sample.Confidence,clock.ElapsedMilliseconds,gtaMode);
@@ -350,6 +408,8 @@ namespace Replik {
             internal long Millis;
             internal string Text;
             internal float Confidence;
+            internal int TesseractPasses,WindowsPasses;
+            internal Size CropSize;
         }
         async Task<Sample> ReadFrame(Reader reader,int delay,CancellationToken token) {
             if(delay>0) await Task.Delay(delay,token).ConfigureAwait(false);
@@ -372,6 +432,9 @@ namespace Replik {
                         sample.Text=reader.ReadGta(image,tight,out sample.Confidence);
                     } else sample.Text=reader.Read(image,out sample.Confidence,gtaMode);
                 }
+                sample.TesseractPasses=reader.LastTesseractPasses;
+                sample.WindowsPasses=reader.LastWindowsPasses;
+                sample.CropSize=area.Size;
                 sample.Window=window; sample.Millis=elapsed.ElapsedMilliseconds;
                 return sample;
             },token).ConfigureAwait(false);

@@ -147,6 +147,21 @@ namespace Replik {
             if(Array.IndexOf(args,"--workers")>=0) WorkerPipes().GetAwaiter().GetResult();
             TranslationPath();
             WorldText();
+            using(var slowReader=new Reader(0,false))
+            using(var frame=new Bitmap(850,155))
+            using(var g=Graphics.FromImage(frame))
+            using(var font=new Font("Segoe UI",20,GraphicsUnit.Pixel))
+            using(var fmt=new StringFormat {Alignment=StringAlignment.Center}) {
+                float confidence;
+                var tightBand=new Rectangle(170,80,510,65);
+                g.Clear(Color.FromArgb(35,39,44));
+                Check(slowReader.ReadGta(frame,tightBand,out confidence)=="" && slowReader.LastTesseractPasses==1,
+                    "A slow blank frame does not run a second native OCR pass");
+                g.DrawString("We can wait under the bridge.",font,Brushes.White,425,52,fmt);
+                string recovered=slowReader.ReadGta(frame,tightBand,out confidence);
+                Check(recovered.Contains("wait under the bridge") && slowReader.LastTesseractPasses==1,
+                    "The next frame tries the wider band with one native pass: "+recovered);
+            }
             using(var reader=new Reader())
             using(var screen=new Bitmap(625,318))
             using(var pen=new Font("Segoe UI",16,GraphicsUnit.Pixel))

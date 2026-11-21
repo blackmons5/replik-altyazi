@@ -108,18 +108,26 @@ namespace Replik {
         readonly Action<long,long> timings;
         readonly RectangleF fraction;
         readonly string key,model;
+        readonly bool local;
         readonly Action<string,string> report;
-        public Session(Target target,RectangleF fraction,string key,string model,Action<string> reading,Action<long,long> timings,Action<string,string> report) {
+        public Session(Target target,RectangleF fraction,string key,string model,bool local,Action<string> reading,Action<long,long> timings,Action<string,string> report) {
+            this.local=local;
             this.target=target; this.reading=reading; this.timings=timings; this.fraction=fraction; this.key=key; this.model=model; this.report=report;
         }
         public async Task Run(CancellationToken token) {
             using (var reader=new Reader())
-            using (var requests=CancellationTokenSource.CreateLinkedTokenSource(token)) {
+            using (var requests=CancellationTokenSource.CreateLinkedTokenSource(token))
+            using (var worker=new LocalTranslator(requests.Token)) {
                 var clock=System.Diagnostics.Stopwatch.StartNew();
                 var dialogue=new Dialogue(async text=>{
-                    reading(text); report("Metin okundu. Gemini çevirisi bekleniyor…",null);
+                    reading(text);
                     var began=clock.ElapsedMilliseconds;
-                    var translated=await Gemini.Translate(key,model,text,requests.Token).ConfigureAwait(false);
+                    var result=await worker.Read(text,local,requests.Token).ConfigureAwait(false);
+                    var translated=result.text;
+                    if(string.IsNullOrEmpty(translated)) {
+                        report(result.pack+" • Gemini çeviriyor…",null);
+                        translated=await Gemini.Translate(key,model,text,requests.Token).ConfigureAwait(false);
+                    } else report(result.pack+" • "+result.provider,null);
                     timings(-1,clock.ElapsedMilliseconds-began);
                     return translated;
                 });

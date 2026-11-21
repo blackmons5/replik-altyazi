@@ -1,7 +1,7 @@
 [Setup]
 AppId=ReplikSubtitleTR
 AppName=Replik
-AppVersion=0.1.2
+AppVersion=0.2.0
 DefaultDirName={autopf}\Replik
 DefaultGroupName=Replik
 DisableProgramGroupPage=yes
@@ -10,7 +10,7 @@ ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0.19041
 OutputDir=dist
 OutputBaseFilename=Replik-Kurulum-x64
-Compression=lzma2
+Compression=lzma2/fast
 SolidCompression=yes
 UninstallDisplayIcon={app}\Replik.exe
 WizardStyle=modern
@@ -26,6 +26,7 @@ Source: "build\inputs\VC_redist.x64.exe"; DestDir: "{tmp}"; Flags: dontcopy
 Name: "{group}\Replik"; Filename: "{app}\Replik.exe"
 
 [Run]
+Filename: "{app}\local\python.exe"; Parameters: "-B translate.py --sync-pack"; WorkingDir: "{app}\local"; StatusMsg: "CouchSubs GTA 6 paketi kontrol ediliyor…"; Flags: runhidden runasoriginaluser waituntilterminated
 Filename: "{app}\Replik.exe"; Description: "Replik uygulamasını aç"; Flags: postinstall nowait skipifsilent unchecked
 
 [Code]

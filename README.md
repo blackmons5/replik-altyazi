@@ -1,18 +1,18 @@
 # Replik
 
-Windows 10 (2004 ve üzeri) ve Windows 11 x64 için İngilizce oyun altyazılarını Gemini ile Türkçeye çeviren masaüstü uygulaması.
+Windows 10 (2004 ve üzeri) ve Windows 11 x64 için İngilizce oyun altyazılarını yerel OPUS-MT veya Gemini ile Türkçeye çeviren masaüstü uygulaması.
 
 ## Kurulum ve kullanım
 
 1. Deponun **Releases** bölümünden **Replik-Kurulum-x64.exe** dosyasını indirip çalıştır. Kurulum İngilizce OCR modelini ve Tesseract motorunu içerir. Gerektiğinde Microsoft Visual C++ çalışma zamanını da kurar.
 2. Oyunda İngilizce altyazıları aç. Replik varsayılan olarak **Alt** bölgesini okur. Altyazı ekranın ortasındaysa **Orta**, üstündeyse **Üst** seç.
-3. Gemini API anahtarını gir, **Çeviriyi başlat** düğmesine bas ve oyuna dön. **Oyuna dönünce bağlan** seçeneği öndeki Veyra veya Remote Play penceresini izler. Oyuncu tanınmazsa **Yenile** ile görüntüyü gösteren pencereyi listeden seç.
-4. Son okunan İngilizce satır, Türkçe yanıt ve görüntü okuma / Gemini süreleri kontrol penceresinde görünür. Çevrilen satırlar konuşma sırasıyla gösterilir. Art arda gelen iki replik aynı kutuda görünebilir. Başka bir uygulamaya geçtiğinde otomatik mod duraklar.
+3. Çeviri motorunu seç. Varsayılan **OPUS-MT** CPU üzerinde çalışır. Model, Python ve çeviri kütüphaneleri EXE'ye dahildir. **Gemini** için kendi anahtarını gir. **Çeviriyi başlat** düğmesine bas ve oyuna dön. **Oyuna dönünce bağlan** seçeneği öndeki Veyra veya Remote Play penceresini izler. Oyuncu tanınmazsa **Yenile** ile görüntüyü gösteren pencereyi listeden seç.
+4. Son okunan İngilizce satır, Türkçe yanıt ve görüntü okuma / çeviri süreleri kontrol penceresinde görünür. Çevrilen satırlar konuşma sırasıyla gösterilir. Art arda gelen iki replik aynı kutuda görünebilir. Başka bir uygulamaya geçtiğinde otomatik mod duraklar.
 
-OCR'ın kabul ettiği yeni satır doğrudan çeviri sırasına girer. En fazla üç Gemini isteği aynı anda çalışır. Sıradaki yanıt geldiğinde yeni ekran karesi beklenmeden gösterilir. Yerel önbellekte bulunan aynı satır için yeni istek yapılmaz.
+CouchSubs GTA 6 topluluk paketi kurulum sırasında resmî sunucudan alınır. Dosya özeti doğrulanır ve paket Windows kullanıcı hesabında saklanır. Replik oturum açılışında, son kontrolden bir gün geçtiyse daha yeni sürümü denetler. İnternet yokken indirilmiş paket kullanılabilir. Tam replik veya cümle parçaları eşleşirse Türkçesi yerelden gelir. Eşleşme yoksa seçtiğin motor çalışır. [Paket kaynağı](https://github.com/yorulmazsinan/couchsubs/tree/main/server/packs)
 
-API anahtarı oturum boyunca bellekte tutulur. Seçilen ekran bölgesi yerel olarak okunur. Gemini'ye algılanan metin gönderilir. Tekrarlanan satırlar oturum içinde önbellekten gösterilir. Yeni satırlardaki gecikme OCR, ağ ve Gemini yanıt süresine bağlıdır. Bu ilk test sürümünün GTA 6 ve Remote Play üzerindeki uyumluluğu henüz doğrulanmadı.
+API anahtarı oturum boyunca bellekte tutulur. Seçilen ekran bölgesi yerel olarak okunur. Yalnızca Gemini seçiliyken pakette bulunamayan metinler Google'a gönderilir. Tekrarlanan satırlar oturum içinde önbellekten gösterilir.
 
 ## Derleme
 
-64 bit Windows, .NET Framework 4.8 ve Inno Setup 6 gerekir. PowerShell'de `./build.ps1 -Compiler 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'` çalıştır. Kurulum dosyası `dist` klasörüne yazılır.
+Derleme için 64 bit Windows, .NET Framework 4.8, Python/pip ve Inno Setup 6 gerekir. PowerShell'de `./build.ps1 -Compiler 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'` çalıştır. Kurulum dosyası `dist` klasörüne yazılır.

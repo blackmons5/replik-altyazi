@@ -29,6 +29,7 @@ namespace Replik {
         readonly Caption overlay=new Caption();
         readonly System.Windows.Forms.Timer positioning=new System.Windows.Forms.Timer { Interval=100 };
         readonly ComboBox presets=new ComboBox();
+        readonly ComboBox engine=new ComboBox();
         readonly Label lastSource=new Label(), lastTranslation=new Label();
         readonly Label latency=new Label();
         RectangleF fraction;
@@ -39,7 +40,7 @@ namespace Replik {
         public Dashboard() {
             Text="Replik • Oyun altyazısı"; Font=new Font("Segoe UI",10);
             AutoScaleMode=AutoScaleMode.Dpi; AutoScaleDimensions=new SizeF(96,96);
-            StartPosition=FormStartPosition.CenterScreen; ClientSize=new Size(530,554);
+            StartPosition=FormStartPosition.CenterScreen; ClientSize=new Size(530,608);
             FormBorderStyle=FormBorderStyle.FixedSingle; MaximizeBox=false; BackColor=Color.FromArgb(247,248,250);
             var title=LabelAt("Replik",24,16,450,42); title.Font=new Font(Font.FontFamily,24,FontStyle.Bold);
             LabelAt("İngilizce oyun altyazısı  →  Türkçe",26,60,480,26);
@@ -49,9 +50,12 @@ namespace Replik {
             LabelAt("Altyazı konumu",26,174,135,26);
             Put(presets,165,168,339,32); presets.DropDownStyle=ComboBoxStyle.DropDownList;
             presets.Items.AddRange(new object[]{"Alt (varsayılan)","Orta","Üst"}); presets.SelectedIndex=0;
-            LabelAt("Gemini API anahtarı",26,218,240,24);
+            LabelAt("Çeviri motoru",26,210,135,26);
+            Put(engine,165,205,339,32); engine.DropDownStyle=ComboBoxStyle.DropDownList;
+            engine.Items.AddRange(new object[]{"OPUS-MT • Bu bilgisayarda","Gemini • API anahtarıyla"});
+            var keyLabel=LabelAt("Gemini API anahtarı",26,218,240,24);
             Put(key,26,244,478,28); key.UseSystemPasswordChar=true;
-            LabelAt("Gemini modeli",26,283,230,24);
+            var modelLabel=LabelAt("Gemini modeli",26,283,230,24);
             Put(model,26,308,478,28); model.Items.Add("gemini-3.1-flash-lite"); model.SelectedIndex=0;
             Put(start,26,355,158,43); start.Text="Çeviriyi başlat"; start.BackColor=Color.FromArgb(22,77,75); start.ForeColor=Color.White;
             start.FlatStyle=FlatStyle.Flat;
@@ -60,6 +64,11 @@ namespace Replik {
             Put(lastSource,26,422,478,40); lastSource.Text="Okunan İngilizce: —";
             Put(lastTranslation,26,466,478,56); lastTranslation.Text="Türkçe: —";
             Put(latency,26,525,478,26);
+            foreach(Control c in new Control[]{keyLabel,key,modelLabel,model,start,status,lastSource,lastTranslation,latency}) c.Top+=48;
+            engine.SelectedIndexChanged+=delegate {
+                key.Enabled=model.Enabled=keyLabel.Enabled=modelLabel.Enabled=engine.SelectedIndex==1;
+            };
+            engine.SelectedIndex=0;
             start.Click+=async delegate { await Toggle(); };
             positioning.Tick+=delegate { PositionCaption(); };
             FormClosing+=delegate { closing=true; if (running!=null) running.Cancel(); positioning.Stop(); overlay.Hide(); };
@@ -86,9 +95,10 @@ namespace Replik {
             target=windows.SelectedItem as Target;
             if (target==null || (target.Handle!=IntPtr.Zero && !Desktop.IsWindow(target.Handle))) { status.Text="Açık ve görünür bir oyun penceresi seç."; return; }
             var apiKey=key.Text.Trim(); var modelId=model.Text.Trim();
-            if (apiKey.Length==0 || !Regex.IsMatch(modelId,@"^gemini-[A-Za-z0-9.\-]+$")) {status.Text="Gemini API anahtarını ve model adını gir."; return;}
+            bool local=engine.SelectedIndex==0;
+            if (!local && (apiKey.Length==0 || !Regex.IsMatch(modelId,@"^gemini-[A-Za-z0-9.\-]+$"))) {status.Text="Gemini API anahtarını ve model adını gir."; return;}
             var source=new CancellationTokenSource(); running=source;
-            presets.Enabled=windows.Enabled=model.Enabled=key.Enabled=refresh.Enabled=false;
+            engine.Enabled=presets.Enabled=windows.Enabled=model.Enabled=key.Enabled=refresh.Enabled=false;
             start.Text="Durdur"; status.Text="Altyazı bekleniyor…"; caption=""; positioning.Start();
             fraction=Desktop.Bands[presets.SelectedIndex];
             lastSource.Text="Okunan İngilizce: —"; lastTranslation.Text="Türkçe: —";
@@ -105,9 +115,9 @@ namespace Replik {
                 if(closing || running!=source) return;
                 if(v.Item1>=0) ocrTime=v.Item1+" ms";
                 if(v.Item2>=0) apiTime=v.Item2+" ms";
-                latency.Text="Son ölçümler  •  Görüntü ve OCR: "+ocrTime+"  •  Gemini: "+apiTime;
+                latency.Text="Son ölçümler  •  Görüntü ve OCR: "+ocrTime+"  •  Çeviri: "+apiTime;
             });
-            var session=new Session(target,fraction,apiKey,modelId,line=>((IProgress<string>)reads).Report(line),
+            var session=new Session(target,fraction,apiKey,modelId,local,line=>((IProgress<string>)reads).Report(line),
                 (ocr,api)=>metrics.Report(Tuple.Create(ocr,api)),(s,c)=>((IProgress<Tuple<string,string>>)progress).Report(Tuple.Create(s,c)));
             string result="Çeviri durduruldu.";
             try { await Task.Run(()=>session.Run(source.Token)); }
@@ -117,7 +127,8 @@ namespace Replik {
                 running=null; source.Dispose();
                 if (!closing) {
                     positioning.Stop(); overlay.Hide(); caption=""; status.Text=result;
-                    start.Enabled=presets.Enabled=windows.Enabled=model.Enabled=key.Enabled=refresh.Enabled=true; start.Text="Çeviriyi başlat";
+                    start.Enabled=engine.Enabled=presets.Enabled=windows.Enabled=refresh.Enabled=true;
+                    model.Enabled=key.Enabled=!local; start.Text="Çeviriyi başlat";
                 }
             }
         }

@@ -10,3 +10,16 @@ https://github.com/DanBloomberg/leptonica
 See Leptonica-license.txt.
 
 Microsoft Visual C++ Redistributable is supplied by Microsoft under its own terms.
+
+OPUS-MT English to Turkish, Helsinki-NLP / University of Helsinki, CC BY 4.0.
+https://huggingface.co/Helsinki-NLP/opus-mt-tc-big-en-tr
+https://creativecommons.org/licenses/by/4.0/
+CTranslate2 conversion by Unbakedcookie, bundled from live-translator-models.
+https://huggingface.co/Unbakedcookie/live-translator-models
+CTranslate2 (MIT), SentencePiece (Apache-2.0), NumPy (BSD and bundled notices),
+PyYAML (MIT), and embedded CPython (PSF). Their notices accompany the runtime.
+
+CouchSubs GTA 6 community pack, maintained by CouchSubs with community contributors
+including lones8888. Retrieved separately from the publisher's pack service.
+https://github.com/yorulmazsinan/couchsubs/pull/387
+https://github.com/yorulmazsinan/couchsubs/tree/main/server/packs

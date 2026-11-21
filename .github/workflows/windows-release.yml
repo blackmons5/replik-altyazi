@@ -1,0 +1,57 @@
+name: Build Windows release
+on: workflow_dispatch
+permissions:
+  contents: write
+concurrency: replik-windows-release
+jobs:
+  release:
+    runs-on: windows-2022
+    timeout-minutes: 55
+    env:
+      PYTHONUTF8: '1'
+      GIT_LFS_SKIP_SMUDGE: '1'
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - name: Build full offline installer
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (!(Test-Path $iscc)) { throw 'Inno Setup 6 missing' }
+          ./build.ps1 -Compiler $iscc
+      - name: Verify embedded model, community pack, OCR and providers
+        run: |
+          & ./build/app/local/python.exe -B tests/local_engine.py build/app/local
+          if ($LASTEXITCODE) {throw 'Offline engine or pack test failed'}
+          $sources=(Get-Item src/*.cs,tests/Regression.cs).FullName
+          $csc=Join-Path $env:WINDIR 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
+          & $csc /nologo /codepage:65001 /platform:x64 /target:exe /main:Replik.Regression /out:build/app/test.exe /r:build/app/Tesseract.dll /r:System.Drawing.dll /r:System.Windows.Forms.dll /r:System.Net.Http.dll /r:System.Web.Extensions.dll $sources
+          if ($LASTEXITCODE) {throw 'Test build failed'}
+          & ./build/app/test.exe
+          if ($LASTEXITCODE) {throw 'Regression tests failed'}
+      - name: Publish verified installer
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference='Stop'
+          $name='Replik-Kurulum-x64.exe'
+          $file=Get-Item "dist/$name"
+          $digest=(Get-FileHash $file.FullName).Hash.ToLowerInvariant()
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git lfs install --local
+          git lfs track $name
+          Copy-Item $file.FullName $name -Force
+          git add -- .gitattributes $name
+          git commit -m 'Publish the bundled OPUS-MT Windows installer'
+          if ($LASTEXITCODE) {throw 'Binary commit failed'}
+          git push origin HEAD:master
+          if ($LASTEXITCODE) {throw 'Repository installer upload failed'}
+          $commit=git rev-parse HEAD
+          gh release create v0.2.0 $file.FullName --target $commit --title 'Replik 0.2.0' --notes-file release-notes.md --latest
+          if ($LASTEXITCODE) {throw 'Release upload failed'}
+          $tag=gh release view v0.2.0 --json assets | ConvertFrom-Json
+          if (($tag.assets | Where-Object name -eq $name).digest -ne "sha256:$digest") {throw 'Release checksum mismatch'}

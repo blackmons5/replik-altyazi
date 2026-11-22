@@ -11,11 +11,7 @@ using System.Windows.Forms;
 
 namespace Replik {
     static class Program {
-        [STAThread] static void Main(string[] args) {
-            if(args.Length==1 && args[0]=="--check-windows-ocr") {
-                Environment.ExitCode=WindowsReader.OpenEnglish()==null?1:0;
-                return;
-            }
+        [STAThread] static void Main() {
             DiagnosticsLog.Local.Startup();
             Desktop.SetProcessDpiAwarenessContext(new IntPtr(-4));
             Environment.SetEnvironmentVariable("OMP_THREAD_LIMIT","1");
@@ -155,6 +151,7 @@ namespace Replik {
             if (running!=null) { running.Cancel(); start.Enabled=false; return; }
             target=windows.SelectedItem as Target;
             if (target==null || (target.Handle!=IntPtr.Zero && !Desktop.IsWindow(target.Handle))) { status.Text="Açık ve görünür bir oyun penceresi seç."; return; }
+            if(!PaddleModel.Find(ocrSettings.Model).Installed) {status.Text="OCR ayarlarından seçili modeli indir veya hazır modeli seç."; return;}
             var apiKey=key.Text.Trim(); var modelId=model.Text.Trim();
             bool local=engine.SelectedIndex==0;
             if (!local && (apiKey.Length==0 || !Regex.IsMatch(modelId,@"^gemini-[A-Za-z0-9.\-]+$"))) {status.Text="Gemini API anahtarını ve model adını gir."; return;}

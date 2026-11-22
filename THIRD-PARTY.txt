@@ -1,13 +1,12 @@
-Tesseract .NET 5.2.0, Charles Weld and contributors
-https://github.com/charlesw/tesseract
-Tesseract OCR and tessdata_fast English language data
-https://github.com/tesseract-ocr/tesseract
-https://github.com/tesseract-ocr/tessdata_fast
-Apache License 2.0, see Apache-2.0.txt.
-
-Leptonica, Dan Bloomberg and contributors
-https://github.com/DanBloomberg/leptonica
-See Leptonica-license.txt.
+PaddleOCR models, PaddlePaddle Authors (Apache-2.0)
+https://github.com/PaddlePaddle/PaddleOCR
+ONNX conversions and RapidOCR, RapidAI contributors (Apache-2.0)
+https://github.com/RapidAI/RapidOCR
+https://www.modelscope.cn/models/RapidAI/RapidOCR
+ONNX Runtime, Microsoft and contributors (MIT)
+https://github.com/microsoft/onnxruntime
+The OCR runtime includes the installed packages' license notices.
+The ANTLR 4 Python runtime (BSD-3-Clause) notice is in ocr/ANTLR-4.9.3.txt.
 
 Microsoft Visual C++ Redistributable is supplied by Microsoft under its own terms.
 

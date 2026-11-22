@@ -17,22 +17,25 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.sha }}
-      - name: Build full offline installer
+      - name: Prepare embedded runtimes and compile Replik
         run: |
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           if (!(Test-Path $iscc)) { throw 'Inno Setup 6 missing' }
-          ./build.ps1 -Compiler $iscc
+          ./build.ps1 -Compiler $iscc -BuildOnly
       - name: Verify embedded model, community pack, OCR and providers
         run: |
           & ./build/app/local/python.exe -B tests/local_engine.py build/app/local
           if ($LASTEXITCODE) {throw 'Offline engine or pack test failed'}
           $sources=(Get-Item src/*.cs,tests/Regression.cs).FullName
           $csc=Join-Path $env:WINDIR 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
-          $ocrRefs = & ./windows-ocr-references.ps1
-          & $csc /nologo /codepage:65001 /platform:x64 /target:exe /main:Replik.Regression /out:build/app/test.exe /r:build/app/Tesseract.dll /r:System.Drawing.dll /r:System.Windows.Forms.dll /r:System.Net.Http.dll /r:System.Web.Extensions.dll $ocrRefs $sources
+          & $csc /nologo /codepage:65001 /platform:x64 /target:exe /main:Replik.Regression /out:build/app/test.exe /r:System.Drawing.dll /r:System.Windows.Forms.dll /r:System.Net.Http.dll /r:System.Web.Extensions.dll $sources
           if ($LASTEXITCODE) {throw 'Test build failed'}
-          & ./build/app/test.exe --workers
+          & ./build/app/test.exe --workers --models
           if ($LASTEXITCODE) {throw 'Regression tests failed'}
+      - name: Build full and upgrade installers
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          ./build.ps1 -Compiler $iscc -PackageOnly
       - name: Verify upgrade of the existing offline model
         run: |
           $ErrorActionPreference='Stop'
@@ -63,17 +66,16 @@ jobs:
           if ((Get-FileHash "$dir/Replik.exe").Hash -ne (Get-FileHash build/app/Replik.exe).Hash) {throw 'Program not updated'}
           if ((Get-Item $model.FullName).LastWriteTimeUtc -ne $stamp) {throw 'Existing model was replaced'}
           if ((Get-FileHash "$dir/local/translate.py").Hash -ne (Get-FileHash build/app/local/translate.py).Hash) {throw 'Worker not updated'}
-          $probe=Start-Process "$dir/Replik.exe" -ArgumentList '--check-windows-ocr' -Wait -PassThru -WindowStyle Hidden
-          if ($probe.ExitCode) {throw 'English Windows OCR unavailable after update'}
-          & ./build/app/test.exe --windows-ocr
-          if ($LASTEXITCODE) {throw 'Windows OCR recognition failed'}
+          if (Test-Path "$dir/Tesseract.dll") {throw 'Old Tesseract DLL is still installed'}
+          if (Test-Path "$dir/tessdata/eng.traineddata") {throw 'Old Tesseract model is still installed'}
           & "$dir/InstalledCaption.exe"
-          if ($LASTEXITCODE) {throw 'Installed OCR to Turkish caption failed'}
+          if ($LASTEXITCODE) {throw 'Upgraded PaddleOCR to Turkish caption failed'}
           $fresh=Join-Path $env:RUNNER_TEMP 'Fresh Replik'
           $p=Start-Process (Get-Item dist/Replik-Kurulum-x64.exe).FullName -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',('/DIR="'+$fresh+'"')) -WindowStyle Hidden -Wait -PassThru
           if ($p.ExitCode) {throw 'Full installation failed'}
-          $probe=Start-Process "$fresh/Replik.exe" -ArgumentList '--check-windows-ocr' -Wait -PassThru -WindowStyle Hidden
-          if ($probe.ExitCode) {throw 'English Windows OCR unavailable after full installation'}
+          Copy-Item "$dir/InstalledCaption.exe" $fresh
+          & "$fresh/InstalledCaption.exe"
+          if ($LASTEXITCODE) {throw 'Fresh PaddleOCR to Turkish caption failed'}
       - name: Publish verified installer
         env:
           GH_TOKEN: ${{ github.token }}
@@ -90,7 +92,7 @@ jobs:
           git lfs track $name
           Copy-Item $file.FullName $name -Force
           git add -- .gitattributes $name
-          git commit -m 'Publish the bundled OPUS-MT Windows installer'
+          git commit -m 'Publish the bundled PaddleOCR and OPUS-MT Windows installer'
           if ($LASTEXITCODE) {throw 'Binary commit failed'}
           git push origin HEAD:master
           if ($LASTEXITCODE) {throw 'Repository installer upload failed'}

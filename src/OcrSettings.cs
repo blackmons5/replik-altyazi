@@ -3,31 +3,37 @@ using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Threading;
 using System.Windows.Forms;
 using System.Web.Script.Serialization;
 
 namespace Replik {
     sealed class OcrSettings {
         static readonly string PathName=Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"Replik","ocr-settings.json");
-        public int Interval {get;set;}
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"Replik","paddle-ocr-settings.json");
+        internal const int SampleInterval=33;
+        public string Model {get;set;}
+        public int ImageStability {get;set;}
         public int ImageSimilarity {get;set;}
-        public int StableFrames {get;set;}
-        public bool MergeTextVariations {get;set;}
+        public int TextDifference {get;set;}
 
         public OcrSettings() {
-            Interval=33;
-            ImageSimilarity=94;
-            MergeTextVariations=true;
+            Model=PaddleModel.Choices[0].Name;
+            ImageStability=50;
+            ImageSimilarity=95;
+            TextDifference=3;
         }
 
         internal static OcrSettings Load() {
             try {
                 if(File.Exists(PathName)) {
                     var settings=new JavaScriptSerializer().Deserialize<OcrSettings>(File.ReadAllText(PathName));
-                    if(settings!=null && settings.Interval>=25 && settings.Interval<=250 &&
-                        settings.ImageSimilarity>=80 && settings.ImageSimilarity<=100 &&
-                        settings.StableFrames>=0 && settings.StableFrames<=2) return settings;
+                    if(settings!=null && settings.ImageStability>=0 && settings.ImageStability<=100 &&
+                        settings.ImageSimilarity>=0 && settings.ImageSimilarity<=100 &&
+                        settings.TextDifference>=0 && settings.TextDifference<=100) {
+                        settings.Model=PaddleModel.Find(settings.Model).Name;
+                        return settings;
+                    }
                 }
             } catch(IOException) {} catch(UnauthorizedAccessException) {}
               catch(ArgumentException) {} catch(InvalidOperationException) {}
@@ -47,7 +53,6 @@ namespace Replik {
         IntPtr lastWindow;
         Rectangle lastArea;
         long lastReadAt;
-        int stable;
         string lastText="";
         bool confirm;
 
@@ -58,7 +63,6 @@ namespace Replik {
             previous=lastRead=null;
             confirm=false;
             lastText="";
-            stable=0;
         }
 
         internal bool ShouldRead(IntPtr window,Rectangle area,byte[] mark,long now) {
@@ -67,10 +71,10 @@ namespace Replik {
                 lastWindow=window;
                 lastArea=area;
             }
-            stable=Similar(mark,previous)?stable+1:0;
+            bool stable=previous==null || Similarity(mark,previous)>=settings.ImageStability;
             previous=mark;
             if(lastRead!=null && !confirm && now-lastReadAt<RefreshAfter &&
-                (stable<settings.StableFrames || Similar(mark,lastRead))) return false;
+                (!stable || Similarity(mark,lastRead)>=settings.ImageSimilarity)) return false;
             lastReadAt=now;
             lastRead=mark;
             return true;
@@ -81,15 +85,14 @@ namespace Replik {
             lastText=text;
         }
 
-        bool Similar(byte[] left,byte[] right) {
-            if(left==null || right==null || left.Length!=right.Length) return false;
+        static double Similarity(byte[] left,byte[] right) {
             int union=0,changed=0;
             for(int i=0;i<left.Length;i++) {
                 if((left[i]|right[i])==0) continue;
                 union++;
                 if(left[i]!=right[i]) changed++;
             }
-            return changed*100<=union*(100-settings.ImageSimilarity);
+            return union==0?100:100.0*(union-changed)/union;
         }
 
         internal static byte[] Mark(Bitmap frame) {
@@ -127,39 +130,80 @@ namespace Replik {
     }
 
     sealed class OcrSettingsDialog : Form {
-        readonly NumericUpDown interval=new NumericUpDown {Minimum=25,Maximum=250};
-        readonly NumericUpDown similarity=new NumericUpDown {Minimum=80,Maximum=100};
-        readonly NumericUpDown stability=new NumericUpDown {Minimum=0,Maximum=2};
-        readonly CheckBox merge=new CheckBox {Text="Küçük OCR metin farklarını birleştir",AutoSize=true};
+        readonly ComboBox models=new ComboBox {DropDownStyle=ComboBoxStyle.DropDownList};
+        readonly NumericUpDown stability=new NumericUpDown {Maximum=100};
+        readonly NumericUpDown similarity=new NumericUpDown {Maximum=100};
+        readonly NumericUpDown textDifference=new NumericUpDown {Maximum=100};
+        readonly Button fetch=new Button {Text="İndir"};
+        readonly Button save=new Button {Text="Kaydet",DialogResult=DialogResult.OK};
+        readonly Label modelStatus=new Label();
+        CancellationTokenSource downloading;
+        PaddleModel SelectedModel {get {return (PaddleModel)models.SelectedItem;}}
 
         internal OcrSettingsDialog(OcrSettings settings) {
-            Text="Görüntü değişimine göre OCR";
+            Text="PaddleOCR ayarları";
             Font=new Font("Segoe UI",10);
             AutoScaleMode=AutoScaleMode.Font;
-            ClientSize=new Size(450,213);
+            ClientSize=new Size(485,250);
             FormBorderStyle=FormBorderStyle.FixedDialog;
             MinimizeBox=MaximizeBox=false;
             ShowInTaskbar=false;
             StartPosition=FormStartPosition.CenterParent;
-            interval.Value=settings.Interval; similarity.Value=settings.ImageSimilarity; stability.Value=settings.StableFrames;
-            merge.Checked=settings.MergeTextVariations;
-            AddRow("Örnekleme aralığı (ms)",interval,18);
-            AddRow("Görüntü benzerliği (%)",similarity,55);
-            AddRow("Sabit kare bekleme (0–2)",stability,92);
-            merge.Location=new Point(16,132); Controls.Add(merge);
-            var save=new Button {Text="Kaydet",DialogResult=DialogResult.OK,Location=new Point(224,169),Size=new Size(100,30)};
-            var cancel=new Button {Text="Vazgeç",DialogResult=DialogResult.Cancel,Location=new Point(334,169),Size=new Size(100,30)};
-            Controls.AddRange(new Control[]{save,cancel});
+            AddRow("OCR modeli",models,18);
+            models.Width=156;
+            fetch.SetBounds(400,17,69,30);
+            modelStatus.SetBounds(16,53,453,25);
+            stability.Value=settings.ImageStability; similarity.Value=settings.ImageSimilarity;
+            textDifference.Value=settings.TextDifference;
+            AddRow("Görüntü kararlılığı eşiği (%)",stability,87);
+            AddRow("Görüntü benzerliği eşiği (%)",similarity,124);
+            AddRow("Metin farkı eşiği (karakter)",textDifference,161);
+            save.SetBounds(259,205,100,30);
+            var cancel=new Button {Text="Vazgeç",DialogResult=DialogResult.Cancel,Location=new Point(369,205),Size=new Size(100,30)};
+            Controls.AddRange(new Control[]{modelStatus,fetch,save,cancel});
             AcceptButton=save; CancelButton=cancel;
+            models.Items.AddRange(PaddleModel.Choices);
+            models.SelectedIndexChanged+=delegate {UpdateModelStatus();};
+            models.SelectedItem=PaddleModel.Find(settings.Model);
+            fetch.Click+=async delegate {
+                var selected=SelectedModel;
+                using(var cancellation=new CancellationTokenSource()) {
+                    downloading=cancellation;
+                    models.Enabled=fetch.Enabled=save.Enabled=false;
+                    modelStatus.Text="Model indiriliyor…";
+                    string error=null;
+                    try {await selected.Download(cancellation.Token);}
+                    catch(OperationCanceledException) {error="Model indirme süresi doldu.";}
+                    catch(Exception ex) {DiagnosticsLog.Local.Error("ocr.model.download",ex); error="Model indirilemedi. Tekrar dene.";}
+                    finally {
+                        downloading=null;
+                        if(!IsDisposed) {
+                            models.Enabled=true;
+                            UpdateModelStatus();
+                            if(error!=null) modelStatus.Text=error;
+                        }
+                    }
+                }
+            };
+            FormClosing+=delegate {if(downloading!=null) downloading.Cancel();};
+        }
+        void UpdateModelStatus() {
+            var model=SelectedModel;
+            bool available=model.Installed;
+            fetch.Visible=!model.Bundled && !available;
+            fetch.Enabled=fetch.Visible;
+            save.Enabled=available;
+            modelStatus.Text=available?(model.Bundled?"Kuruluma dahil • İngilizce, Japonca, Çince":"Model hazır"):
+                (model.Bundled?"Model dosyaları eksik. Replik kurulumunu yeniden çalıştır.":"Bu model için İndir düğmesini kullan.");
         }
         void AddRow(string caption,Control field,int y) {
-            var label=new Label {Text=caption,Location=new Point(16,y+4),Size=new Size(210,25)};
-            field.SetBounds(230,y,204,28);
+            var label=new Label {Text=caption,Location=new Point(16,y+4),Size=new Size(213,25)};
+            field.SetBounds(234,y,235,28);
             Controls.AddRange(new[]{label,field});
         }
         internal OcrSettings Value {
-            get {return new OcrSettings {Interval=(int)interval.Value,
-                ImageSimilarity=(int)similarity.Value,StableFrames=(int)stability.Value,MergeTextVariations=merge.Checked};}
+            get {return new OcrSettings {Model=SelectedModel.Name,ImageStability=(int)stability.Value,
+                ImageSimilarity=(int)similarity.Value,TextDifference=(int)textDifference.Value};}
         }
     }
 }

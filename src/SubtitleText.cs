@@ -109,6 +109,24 @@ namespace Replik {
             return word.Replace('l','i').Replace("rn","m").Replace("vv","w");
         }
 
+        internal static bool EditDistanceBelow(string left,string right,int threshold) {
+            var a=Normalize(left);
+            var b=Normalize(right);
+            if(Math.Abs(a.Length-b.Length)>=threshold) return false;
+            var previous=new int[b.Length+1];
+            var next=new int[b.Length+1];
+            for(int j=0;j<previous.Length;j++) previous[j]=j;
+            for(int i=1;i<=a.Length;i++) {
+                next[0]=i;
+                for(int j=1;j<=b.Length;j++)
+                    next[j]=Math.Min(Math.Min(next[j-1]+1,previous[j]+1),previous[j-1]+(a[i-1]==b[j-1]?0:1));
+                var swap=previous;
+                previous=next;
+                next=swap;
+            }
+            return previous[b.Length]<threshold;
+        }
+
         internal static bool SameLine(string left,string right,bool allowFuzzy,bool allowGlyphs=false) {
             if(left==right) return true;
             if(left.Length==0 || right.Length==0) return false;

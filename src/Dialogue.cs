@@ -26,7 +26,7 @@ namespace Replik {
         readonly Dictionary<string,string> cache=new Dictionary<string,string>(StringComparer.OrdinalIgnoreCase);
         readonly List<Job> retired=new List<Job>();
         readonly Func<string,CancellationToken,Task<string>> translate;
-        readonly bool mergeTextVariations;
+        readonly int textDifference;
         Cue captured,earlierCapture,visibleCue;
         Job pending;
         string shown="",uncertain="";
@@ -34,15 +34,20 @@ namespace Replik {
         long uncertainSeen,blankSince=-1,shownAt;
 
         public Dialogue(Func<string,Task<string>> translate) : this((text,token)=>translate(text)) {}
-        public Dialogue(Func<string,CancellationToken,Task<string>> translate,bool mergeTextVariations=true) {
+        public Dialogue(Func<string,CancellationToken,Task<string>> translate,int textDifference=3) {
             this.translate=translate;
-            this.mergeTextVariations=mergeTextVariations;
+            this.textDifference=textDifference;
         }
 
+        bool MatchesText(string text,string previous,bool fuzzy) {
+            if(SubtitleText.SameLine(text,previous,false)) return true;
+            return textDifference>0 && SubtitleText.SameLine(text,previous,fuzzy,true) &&
+                SubtitleText.EditDistanceBelow(text,previous,textDifference);
+        }
         bool MatchesCapture(string text,float confidence,Cue cue,long now) {
-            bool adjacent=mergeTextVariations && now-cue.LastSeen<=VariationWindow;
-            return SubtitleText.SameLine(text,cue.Text,adjacent && Math.Min(confidence,cue.Confidence)<.88f,adjacent)
-                || (adjacent && SubtitleText.IsClippedRead(text,cue.Text));
+            if(now-cue.LastSeen>VariationWindow) return SubtitleText.SameLine(text,cue.Text,false);
+            return MatchesText(text,cue.Text,Math.Min(confidence,cue.Confidence)<.88f) ||
+                (textDifference>0 && SubtitleText.IsClippedRead(text,cue.Text));
         }
         internal void Observe(string text,float confidence,long now,bool gtaRow=false) {
             text=SubtitleText.Clean(text);
@@ -76,7 +81,7 @@ namespace Replik {
             bool shortGtaRow=gtaRow && confidence>=.86f && SubtitleText.IsShortUtterance(text);
             bool ambiguousFragment=gtaRow && shown.Length>0 && confidence<.93f && !hasSentenceEnd && !shortGtaRow;
             if(((confidence<.85f && !completeGtaRow) || ambiguousFragment) &&
-                (now-uncertainSeen>ConfirmationWindow || !SubtitleText.SameLine(text,uncertain,mergeTextVariations,mergeTextVariations))) {
+                (now-uncertainSeen>ConfirmationWindow || !MatchesText(text,uncertain,true))) {
                 if(blankSince<0) blankSince=now;
                 uncertain=text; uncertainSeen=now;
                 // Keep one-off noise from dispatching a translation. Hide the old

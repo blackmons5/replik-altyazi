@@ -121,29 +121,28 @@ namespace Replik {
             }
         }
         static void OcrImageChanges() {
-            var saved=new System.Web.Script.Serialization.JavaScriptSerializer().Deserialize<OcrSettings>(
-                "{\"Adaptive\":false,\"Interval\":60,\"ImageSimilarity\":96,\"StableFrames\":1,\"MergeTextVariations\":true}");
-            Check(saved.Interval==60 && saved.ImageSimilarity==96 && saved.StableFrames==1,
-                "Saved settings from the preceding release keep their numeric values");
+            var defaults=new OcrSettings();
+            Check(defaults.Model=="PP-OCRv5_mobile" && defaults.ImageStability==50 &&
+                defaults.ImageSimilarity==95 && defaults.TextDifference==3,"Use Luna analysis defaults with the bundled model");
             var window=new IntPtr(1);
             var area=new Rectangle(0,0,800,130);
             var one=new byte[]{1,1,0,0};
             var two=new byte[]{0,1,1,1};
-            var gate=new OcrChangeGate(new OcrSettings());
+            var gate=new OcrChangeGate(defaults);
             Check(gate.ShouldRead(window,area,one,0),"The first visible frame always runs OCR");
             gate.Record("Stay here.",.96f);
-            Check(!gate.ShouldRead(window,area,one,33),"Adaptive mode skips an unchanged subtitle image");
-            Check(gate.ShouldRead(window,area,two,66),"The default detects a change immediately");
+            Check(!gate.ShouldRead(window,area,one,33),"Skip an unchanged image");
+            Check(!gate.ShouldRead(window,area,two,66),"Wait a frame when the previous image differs too much");
+            Check(gate.ShouldRead(window,area,two,99),"Read a stabilized image significantly different from the last OCR");
             gate.Record("We have to move.",.80f);
-            Check(gate.ShouldRead(window,area,two,99),"A low-confidence read gets another attempt without waiting");
+            Check(gate.ShouldRead(window,area,two,132),"A low-confidence read gets another attempt without waiting");
             gate.Record("We have to move.",.80f);
-            Check(!gate.ShouldRead(window,area,two,130),"A repeated OCR reading stops forcing extra passes");
-            Check(gate.ShouldRead(window,area,two,319),"Adaptive mode periodically rechecks apparently unchanged pixels");
-            Check(gate.ShouldRead(new IntPtr(2),area,two,330),"A different game window resets the image comparison");
-            var stable=new OcrChangeGate(new OcrSettings{StableFrames=1});
-            Check(stable.ShouldRead(window,area,one,0) && !stable.ShouldRead(window,area,two,33) &&
-                stable.ShouldRead(window,area,two,66),"Image stability is optional and waits for the configured count");
-            var exactText=new Dialogue((line,token)=>Task.FromResult(line),false);
+            Check(!gate.ShouldRead(window,area,two,165),"A repeated OCR reading stops forcing extra passes");
+            Check(gate.ShouldRead(window,area,two,352),"Recover from a missed frame even when the crop looks unchanged");
+            Check(gate.ShouldRead(new IntPtr(2),area,two,363),"A different game window resets the image comparison");
+            Check(SubtitleText.EditDistanceBelow("Stay in the middie.","Stay in the middle.",3) &&
+                !SubtitleText.EditDistanceBelow("Stay in the middie.","Stay in the middle.",1),"Apply a strict character edit distance");
+            var exactText=new Dialogue((line,token)=>Task.FromResult(line),0);
             exactText.Observe("Stay in the middle of the street.",.96f,0);
             exactText.Tick(0);
             exactText.Observe("Stay in the middie of the street.",.94f,60);
@@ -152,46 +151,28 @@ namespace Replik {
         static void Main(string[] args) {
             OcrImageChanges();
             GeminiRecovery();
-            if(Array.IndexOf(args,"--windows-ocr")>=0) {
-                var windows=WindowsReader.OpenEnglish();
-                Check(windows!=null,"Installed English Windows OCR engine");
-                using(var crop=new Bitmap(600,76))
-                using(var g=Graphics.FromImage(crop))
-                using(var font=new Font("Segoe UI",16,GraphicsUnit.Pixel))
-                using(var fmt=new StringFormat {Alignment=StringAlignment.Center}) {
-                    g.Clear(Color.FromArgb(38,42,48));
-                    g.DrawString("Wait",font,Brushes.White,300,27,fmt);
-                    var actual=windows.ReadLine(crop,new SubtitleImage(crop));
-                    Check(actual=="Wait","Windows OCR reads the centered short subtitle: "+actual);
-                    g.Clear(Color.FromArgb(38,42,48));
-                    g.DrawString("We still have time to change our plans.",font,Brushes.White,300,27,fmt);
-                    actual=windows.ReadLine(crop,new SubtitleImage(crop));
-                    Check(actual.StartsWith("We still have time to change our plans",StringComparison.OrdinalIgnoreCase),
-                        "Windows OCR reads a longer centered subtitle: "+actual);
-                    g.Clear(Color.FromArgb(38,42,48));
-                    g.DrawString("BUS LANE",font,Brushes.White,300,27,fmt);
-                    Check(windows.ReadLine(crop,new SubtitleImage(crop))=="","Windows OCR rejects road labels");
+            if(Array.IndexOf(args,"--models")>=0) {
+                foreach(var model in PaddleModel.Choices) {
+                    using(var token=new CancellationTokenSource(TimeSpan.FromMinutes(5))) {
+                        model.Download(token.Token).GetAwaiter().GetResult();
+                        using(var reader=new Reader(token.Token,model))
+                        using(var crop=new Bitmap(720,120))
+                        using(var g=Graphics.FromImage(crop))
+                        using(var font=new Font("Segoe UI",24,GraphicsUnit.Pixel))
+                        using(var fmt=new StringFormat {Alignment=StringAlignment.Center}) {
+                            g.Clear(Color.FromArgb(38,42,48));
+                            g.DrawString("Please wait here.",font,Brushes.White,360,47,fmt);
+                            float score;
+                            var text=reader.Read(crop,out score);
+                            Check(text.IndexOf("Please wait here",StringComparison.OrdinalIgnoreCase)>=0,model.Name+": "+text);
+                            Console.WriteLine(model.Name+" read: "+text);
+                        }
+                    }
                 }
-                Console.WriteLine("English Windows OCR read Wait and rejected the road label.");
             }
             if(Array.IndexOf(args,"--workers")>=0) WorkerPipes().GetAwaiter().GetResult();
             TranslationPath();
             WorldText();
-            using(var slowReader=new Reader(0,false))
-            using(var frame=new Bitmap(850,155))
-            using(var g=Graphics.FromImage(frame))
-            using(var font=new Font("Segoe UI",20,GraphicsUnit.Pixel))
-            using(var fmt=new StringFormat {Alignment=StringAlignment.Center}) {
-                float confidence;
-                var tightBand=new Rectangle(170,80,510,65);
-                g.Clear(Color.FromArgb(35,39,44));
-                Check(slowReader.ReadGta(frame,tightBand,out confidence)=="" && slowReader.LastTesseractPasses==1,
-                    "A slow blank frame does not run a second native OCR pass");
-                g.DrawString("We can wait under the bridge.",font,Brushes.White,425,52,fmt);
-                string recovered=slowReader.ReadGta(frame,tightBand,out confidence);
-                Check(recovered.Contains("wait under the bridge") && slowReader.LastTesseractPasses==1,
-                    "The next frame tries the wider band with one native pass: "+recovered);
-            }
             using(var reader=new Reader())
             using(var screen=new Bitmap(625,318))
             using(var pen=new Font("Segoe UI",16,GraphicsUnit.Pixel))
@@ -203,11 +184,9 @@ namespace Replik {
                 g.DrawString(second,pen,Brushes.White,(screen.Width-g.MeasureString(second,pen).Width)/2,257);
                 var bounds=new Rectangle(Point.Empty,screen.Size);
                 var wide=Desktop.Pixels(bounds,Desktop.WideGtaBand);
-                var tight=Desktop.Pixels(bounds,Desktop.Bands[0]);
-                tight.Offset(-wide.X,-wide.Y);
                 using(var crop=screen.Clone(wide,screen.PixelFormat)) {
                     float score;
-                    var text=reader.ReadGta(crop,tight,out score);
+                    var text=reader.Read(crop,out score,true);
                     Check(text.Contains("other side of the bridge") && text.Contains("wait for your signal"),"Read both rows in a wider subtitle: "+text);
                 }
             }

@@ -4,7 +4,7 @@ Windows 10 (2004 ve üzeri) ve Windows 11 x64 için İngilizce oyun altyazılar�
 
 ## Kurulum ve kullanım
 
-1. Deponun **Releases** bölümünden **Replik-Kurulum-x64.exe** dosyasını indirip çalıştır. Tesseract ve İngilizce modeli pakettedir. Hem tam kurulum hem küçük güncelleme, bilgisayarında eksikse İngilizce Windows OCR bileşenini Windows Update üzerinden kurar. Windows Update erişimi yoksa Replik Tesseract ile çalışır. Tam kurulum gerektiğinde Microsoft Visual C++ çalışma zamanını da kurar.
+1. Deponun **Releases** bölümünden **Replik-Kurulum-x64.exe** dosyasını indirip çalıştır. PaddleOCR ve PP-OCRv5 Mobile modeli kurulum paketine dahildir. Tam kurulum gerektiğinde Microsoft Visual C++ çalışma zamanını da kurar.
 2. Oyunda İngilizce altyazıları aç. Replik varsayılan olarak **Alt** bölgesini okur. Altyazı ekranın ortasındaysa **Orta**, üstündeyse **Üst** seç.
 3. Çeviri motorunu seç. Varsayılan **OPUS-MT** CPU üzerinde çalışır. Model, Python ve çeviri kütüphaneleri EXE'ye dahildir. **Gemini** için kendi anahtarını gir. **Çeviriyi başlat** düğmesine bas ve oyuna dön. **Oyuna dönünce bağlan** seçeneği öndeki Veyra veya Remote Play penceresini izler. Oyuncu tanınmazsa **Yenile** ile görüntüyü gösteren pencereyi listeden seç.
 4. Son okunan İngilizce satır, Türkçe yanıt ve görüntü okuma / çeviri süreleri kontrol penceresinde görünür. Oyunda yeni bir replik algılandığında kutuda o repliğin çevirisi gösterilir. Önceki replik için geç gelen yanıt elenir. Başka bir uygulamaya geçtiğinde otomatik mod duraklar.
@@ -15,7 +15,16 @@ API anahtarı oturum boyunca bellekte tutulur. Seçilen ekran bölgesi yerel ola
 
 **Tanı günlüğünü aç** bağlantısı, yakalama, OCR ve çeviri durumunu bilgisayarda tutulan bir dosyada gösterir. Günlüğe altyazı metni, ekran görüntüsü veya API anahtarı yazılmaz.
 
-Replik, altyazı bölgesindeki görsel değişikliklerde OCR çalıştırır ve benzer görüntüleri 220 ms arayla yeniden denetler. **OCR ayarları** düğmesinden örnekleme aralığını, görüntü benzerliğini, sabit kare beklemeyi ve küçük metin farklarının nasıl işleneceğini ayarlayabilirsin. Ayarlar cihazda saklanır.
+**OCR ayarları** ekranında PP-OCRv5 Mobile hazır gelir. PP-OCRv6 Small veya Medium seçersen model dosyalarını **İndir** düğmesiyle alabilirsin. İndirilen modeller çevrimdışı çalışır. LunaTranslator’ın görüntü analizi modundaki varsayılan eşikler kullanılır. Görüntü kararlılığı %50, son OCR görüntüsüne benzerlik %95 ve metin farkı 3 karakterdir. Replik bu eşikleri GTA’nın altyazı alanına uygular ve kaçan okumaları yakalamak için 220 ms sonra yeniden kontrol eder. [LunaTranslator OCR ayarları](https://docs.lunatranslator.org/en/ocrparam.html)
+
+```mermaid
+flowchart LR
+    Frame["Oyun altyazı alanı"] --> OCR["PaddleOCR"]
+    OCR --> Pack{"CouchSubs paketinde eşleşme var mı?"}
+    Pack -->|Var| Caption["Güncel repliğin Türkçe altyazısı"]
+    Pack -->|Yok| MT["Yerel OPUS-MT"]
+    MT --> Caption
+```
 
 ## Derleme
 
@@ -25,4 +34,4 @@ Replik 0.2.1 ve üzeri açılışta, ardından altı saatte bir yeni kararlı Gi
 
 ### Windows EXE
 
-Derleme için 64 bit Windows, .NET Framework 4.8, Windows 10 veya 11 SDK, Python/pip ve Inno Setup 6 gerekir. PowerShell'de `./build.ps1 -Compiler 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'` çalıştır. Kurulum dosyası `dist` klasörüne yazılır.
+Derleme için 64 bit Windows, .NET Framework 4.8, Python/pip ve Inno Setup 6 gerekir. PowerShell'de `./build.ps1 -Compiler 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'` çalıştır. Kurulum dosyası `dist` klasörüne yazılır.

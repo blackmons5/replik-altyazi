@@ -321,13 +321,13 @@ namespace Replik {
         }
         public async Task Run(CancellationToken token) {
             bool gtaMode=fraction==Desktop.Bands[0];
-            DiagnosticsLog.Local.Write("session.start","provider={0} preset={1} ocr_adaptive={2} interval_ms={3}",
-                local?"opus-mt":"gemini",gtaMode?"bottom":fraction==Desktop.Bands[1]?"middle":"top",ocrSettings.Adaptive,ocrSettings.Interval);
+            DiagnosticsLog.Local.Write("session.start","provider={0} preset={1} interval_ms={2}",
+                local?"opus-mt":"gemini",gtaMode?"bottom":fraction==Desktop.Bands[1]?"middle":"top",ocrSettings.Interval);
             using (var reader=new Reader(useFingerprint:false))
             using (var requests=CancellationTokenSource.CreateLinkedTokenSource(token))
             using (var worker=new LocalTranslator(requests.Token)) {
                 var clock=System.Diagnostics.Stopwatch.StartNew();
-                var gate=ocrSettings.Adaptive?new OcrChangeGate(ocrSettings):null;
+                var gate=new OcrChangeGate(ocrSettings);
                 var fallback=new GeminiFallback((text,ct)=>Gemini.Translate(key,model,text,ct),
                     async (text,ct)=>(await worker.Read(text,true,ct,false).ConfigureAwait(false)).text);
                 var dialogue=new Dialogue(async (text,cueToken)=>{
@@ -428,7 +428,7 @@ namespace Replik {
                 var sample=new Sample();
                 var window=target.ActiveWindow();
                 if(window==IntPtr.Zero) {
-                    if(gate!=null) gate.Reset();
+                    gate.Reset();
                     return sample;
                 }
                 var bounds=Desktop.Bounds(window);
@@ -441,7 +441,7 @@ namespace Replik {
                 using(var image=Desktop.Capture(area)) {
                     if(Desktop.GetForegroundWindow()!=window) return sample;
                     sample.Window=window;
-                    if(gate!=null && !gate.ShouldRead(window,area,OcrChangeGate.Mark(image),clock.ElapsedMilliseconds)) {
+                    if(!gate.ShouldRead(window,area,OcrChangeGate.Mark(image),clock.ElapsedMilliseconds)) {
                         sample.Millis=elapsed.ElapsedMilliseconds;
                         return sample;
                     }
@@ -449,7 +449,7 @@ namespace Replik {
                         tight.Offset(-area.X,-area.Y);
                         sample.Text=reader.ReadGta(image,tight,out sample.Confidence);
                     } else sample.Text=reader.Read(image,out sample.Confidence,gtaMode);
-                    if(gate!=null) gate.Record(sample.Text,sample.Confidence);
+                    gate.Record(sample.Text,sample.Confidence);
                 }
                 sample.Read=true;
                 sample.TesseractPasses=reader.LastTesseractPasses;

@@ -120,7 +120,11 @@ namespace Replik {
                 Check(localCalls==before,"A replaced cue never starts a local fallback");
             }
         }
-        static void OcrReadingModes() {
+        static void OcrImageChanges() {
+            var saved=new System.Web.Script.Serialization.JavaScriptSerializer().Deserialize<OcrSettings>(
+                "{\"Adaptive\":false,\"Interval\":60,\"ImageSimilarity\":96,\"StableFrames\":1,\"MergeTextVariations\":true}");
+            Check(saved.Interval==60 && saved.ImageSimilarity==96 && saved.StableFrames==1,
+                "Saved settings from the preceding release keep their numeric values");
             var window=new IntPtr(1);
             var area=new Rectangle(0,0,800,130);
             var one=new byte[]{1,1,0,0};
@@ -144,16 +148,9 @@ namespace Replik {
             exactText.Tick(0);
             exactText.Observe("Stay in the middie of the street.",.94f,60);
             Check(exactText.Tick(60)=="Stay in the middie of the street.","Text variation merging can be disabled");
-            using(var reader=new Reader(useWindows:false,useFingerprint:false))
-            using(var sameImage=new Bitmap(600,76)) {
-                float confidence;
-                reader.Read(sameImage,out confidence,true);
-                reader.Read(sameImage,out confidence,true);
-                Check(reader.LastTesseractPasses>0,"Periodic mode runs OCR even on identical pixels");
-            }
         }
         static void Main(string[] args) {
-            OcrReadingModes();
+            OcrImageChanges();
             GeminiRecovery();
             if(Array.IndexOf(args,"--windows-ocr")>=0) {
                 var windows=WindowsReader.OpenEnglish();

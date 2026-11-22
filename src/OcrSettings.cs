@@ -10,14 +10,12 @@ namespace Replik {
     sealed class OcrSettings {
         static readonly string PathName=Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"Replik","ocr-settings.json");
-        public bool Adaptive {get;set;}
         public int Interval {get;set;}
         public int ImageSimilarity {get;set;}
         public int StableFrames {get;set;}
         public bool MergeTextVariations {get;set;}
 
         public OcrSettings() {
-            Adaptive=true;
             Interval=33;
             ImageSimilarity=94;
             MergeTextVariations=true;
@@ -129,45 +127,38 @@ namespace Replik {
     }
 
     sealed class OcrSettingsDialog : Form {
-        readonly ComboBox mode=new ComboBox {DropDownStyle=ComboBoxStyle.DropDownList};
         readonly NumericUpDown interval=new NumericUpDown {Minimum=25,Maximum=250};
         readonly NumericUpDown similarity=new NumericUpDown {Minimum=80,Maximum=100};
         readonly NumericUpDown stability=new NumericUpDown {Minimum=0,Maximum=2};
         readonly CheckBox merge=new CheckBox {Text="Küçük OCR metin farklarını birleştir",AutoSize=true};
 
         internal OcrSettingsDialog(OcrSettings settings) {
-            Text="OCR ayarları";
+            Text="Görüntü değişimine göre OCR";
             Font=new Font("Segoe UI",10);
             AutoScaleMode=AutoScaleMode.Font;
-            ClientSize=new Size(450,250);
+            ClientSize=new Size(450,213);
             FormBorderStyle=FormBorderStyle.FixedDialog;
             MinimizeBox=MaximizeBox=false;
             ShowInTaskbar=false;
             StartPosition=FormStartPosition.CenterParent;
-            mode.Items.AddRange(new object[]{"Görüntü değişimine göre","Periyodik"});
-            mode.SelectedIndex=settings.Adaptive?0:1;
             interval.Value=settings.Interval; similarity.Value=settings.ImageSimilarity; stability.Value=settings.StableFrames;
             merge.Checked=settings.MergeTextVariations;
-            AddRow("Okuma yöntemi",mode,18);
-            AddRow("Örnekleme aralığı (ms)",interval,55);
-            AddRow("Görüntü benzerliği (%)",similarity,92);
-            AddRow("Sabit kare bekleme (0–2)",stability,129);
-            merge.Location=new Point(16,169); Controls.Add(merge);
-            var save=new Button {Text="Kaydet",DialogResult=DialogResult.OK,Location=new Point(224,206),Size=new Size(100,30)};
-            var cancel=new Button {Text="Vazgeç",DialogResult=DialogResult.Cancel,Location=new Point(334,206),Size=new Size(100,30)};
+            AddRow("Örnekleme aralığı (ms)",interval,18);
+            AddRow("Görüntü benzerliği (%)",similarity,55);
+            AddRow("Sabit kare bekleme (0–2)",stability,92);
+            merge.Location=new Point(16,132); Controls.Add(merge);
+            var save=new Button {Text="Kaydet",DialogResult=DialogResult.OK,Location=new Point(224,169),Size=new Size(100,30)};
+            var cancel=new Button {Text="Vazgeç",DialogResult=DialogResult.Cancel,Location=new Point(334,169),Size=new Size(100,30)};
             Controls.AddRange(new Control[]{save,cancel});
             AcceptButton=save; CancelButton=cancel;
-            mode.SelectedIndexChanged+=delegate {ToggleAdaptiveFields();};
-            ToggleAdaptiveFields();
         }
         void AddRow(string caption,Control field,int y) {
             var label=new Label {Text=caption,Location=new Point(16,y+4),Size=new Size(210,25)};
             field.SetBounds(230,y,204,28);
             Controls.AddRange(new[]{label,field});
         }
-        void ToggleAdaptiveFields() {similarity.Enabled=stability.Enabled=mode.SelectedIndex==0;}
         internal OcrSettings Value {
-            get {return new OcrSettings {Adaptive=mode.SelectedIndex==0,Interval=(int)interval.Value,
+            get {return new OcrSettings {Interval=(int)interval.Value,
                 ImageSimilarity=(int)similarity.Value,StableFrames=(int)stability.Value,MergeTextVariations=merge.Checked};}
         }
     }

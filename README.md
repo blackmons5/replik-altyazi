@@ -15,7 +15,7 @@ API anahtarı oturum boyunca bellekte tutulur. Seçilen ekran bölgesi yerel ola
 
 **Tanı günlüğünü aç** bağlantısı, yakalama, OCR ve çeviri durumunu bilgisayarda tutulan bir dosyada gösterir. Günlüğe altyazı metni, ekran görüntüsü veya API anahtarı yazılmaz.
 
-**OCR ayarları** düğmesinden görüntü değişimine göre veya periyodik okumayı seçebilirsin. Varsayılan ayar, altyazı bölgesindeki görsel değişikliklerde hemen OCR çalıştırır ve benzer görüntüleri 220 ms arayla yeniden denetler. Örnekleme aralığı ve benzerlik seçenekleri cihazda saklanır.
+Replik, altyazı bölgesindeki görsel değişikliklerde OCR çalıştırır ve benzer görüntüleri 220 ms arayla yeniden denetler. **OCR ayarları** düğmesinden örnekleme aralığını, görüntü benzerliğini, sabit kare beklemeyi ve küçük metin farklarının nasıl işleneceğini ayarlayabilirsin. Ayarlar cihazda saklanır.
 
 ## Derleme
 

@@ -45,9 +45,7 @@ Name: "{group}\Replik"; Filename: "{app}\Replik.exe"
 
 [Run]
 Filename: "{sys}\dism.exe"; Parameters: "/Online /Add-Capability /CapabilityName:Language.OCR~~~en-US~0.0.1.0 /Quiet /NoRestart"; StatusMsg: "Bu bilgisayarda İngilizce Windows OCR hazırlanıyor. Windows Update birkaç dakika sürebilir…"; Check: NeedsEnglishOcr; AfterInstall: CheckEnglishOcrResult; Flags: runhidden waituntilterminated
-#ifndef Patch
 Filename: "{app}\local\python.exe"; Parameters: "-B translate.py --sync-pack"; WorkingDir: "{app}\local"; StatusMsg: "CouchSubs GTA 6 paketi kontrol ediliyor…"; Flags: runhidden runasoriginaluser waituntilterminated
-#endif
 Filename: "{app}\Replik.exe"; Description: "Replik uygulamasını aç"; Flags: postinstall nowait skipifsilent unchecked
 
 [Code]

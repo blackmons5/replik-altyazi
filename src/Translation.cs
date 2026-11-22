@@ -328,28 +328,29 @@ namespace Replik {
                     var began=clock.ElapsedMilliseconds;
                     using(var linked=CancellationTokenSource.CreateLinkedTokenSource(requests.Token,cueToken)) {
                         string translated="";
+                        string provider="none";
                         try {
-                            // The default engine gets the first chance. The GTA pack can
-                            // recover a line if the model returns an unusable result.
-                            var result=await worker.Read(text,local,linked.Token,!local).ConfigureAwait(false);
+                            var result=await worker.Read(text,local,linked.Token).ConfigureAwait(false);
                             translated=SubtitleText.CleanTranslation(text,result.text);
+                            if(local && translated.Length==0 && result.provider=="GTA 6 paketi") {
+                                result=await worker.Read(text,true,linked.Token,false).ConfigureAwait(false);
+                                translated=SubtitleText.CleanTranslation(text,result.text);
+                            }
+                            if(translated.Length>0) provider=result.provider;
                         } catch(IOException) {
                             if(local) throw;
                         } catch(InvalidOperationException ex) {
                             DiagnosticsLog.Local.Error("translation.local.error",ex);
                         }
-                        if(local && translated.Length==0) {
-                            var result=await worker.Read(text,false,linked.Token).ConfigureAwait(false);
-                            translated=SubtitleText.CleanTranslation(text,result.text);
-                        }
                         if(!local && string.IsNullOrEmpty(translated)) {
                             linked.Token.ThrowIfCancellationRequested();
                             report("Gemini çeviriyor…",null);
                             translated=await fallback.Translate(text,linked.Token).ConfigureAwait(false);
+                            provider="gemini-or-opus-mt";
                         }
                         linked.Token.ThrowIfCancellationRequested();
                         translated=SubtitleText.CleanTranslation(text,translated);
-                        DiagnosticsLog.Local.Write("translation.result","has_output={0} elapsed_ms={1}",translated.Length>0,clock.ElapsedMilliseconds-began);
+                        DiagnosticsLog.Local.Write("translation.result","has_output={0} elapsed_ms={1} provider={2}",translated.Length>0,clock.ElapsedMilliseconds-began,provider);
                         if(translated.Length==0) report("Bu replik için geçerli Türkçe çeviri alınamadı.",null);
                         timings(-1,clock.ElapsedMilliseconds-began);
                         return translated;

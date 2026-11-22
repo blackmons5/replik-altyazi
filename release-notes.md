@@ -1,3 +1,7 @@
+Replik önce GTA 6 topluluk paketini arar. Tam eşleşme bulunmazsa uzun repliklerde tek bir yaygın OCR harf hatası, eşleşme benzersiz olduğunda düzeltilebilir. Hazır çeviri yoksa varsayılan OPUS-MT veya seçili Gemini çalışır. Yerel modda birden çok cümleli replikte yalnızca bir cümle eksikse, model o cümleyi çevirir.
+
+Tam kurulum ve küçük güncelleme, GTA 6 paketini oynanan bilgisayara indirir veya mevcut kopyayı doğrular. Bir indirme adresine ulaşılamadığında ikinci resmî adres denenir. Paket kurulduktan sonra çevrimdışı kullanılabilir.
+
 GTA alt bölgesinde bir OCR karesi yavaş okunduğunda, Replik ek Tesseract okumalarını sınırlar. Geniş alan gerekiyorsa sonraki karede denenir. İngilizce Windows OCR kullanılabiliyorsa yavaş kareden sonra birkaç kareyi önce o okur.
 
 Tanı günlüğü artık görüntü boyutunu, OCR geçiş sayılarını ve bir repliğin çeviriye gönderildiği anı kaydeder.

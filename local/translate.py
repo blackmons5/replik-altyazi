@@ -14,16 +14,24 @@ import unicodedata
 from urllib.request import Request, urlopen
 
 CATALOG = "https://couchsubs-packs.enmeraapps.com/v1/packs"
+MIRROR = "https://couchsubs-packs.enmera.workers.dev/v1/packs"
 MODEL = Path(__file__).resolve().parent / "model"
 MAX_PACK = 96 * 1024 * 1024
 
 
-def key(text):
+def normalize(text):
     text = re.sub(r"<[^<>]{0,40}>", " ", text)
     text = unicodedata.normalize("NFD", unicodedata.normalize("NFKC", text).lower())
     letters = (" " if not c.isalnum() else c for c in text if not unicodedata.category(c).startswith("M"))
-    normalized = " ".join("".join(letters).split())
+    return " ".join("".join(letters).split())
+
+
+def digest(normalized):
     return hashlib.sha256(normalized.encode()).hexdigest()[:16]
+
+
+def key(text):
+    return digest(normalize(text))
 
 
 def fetch(url, limit):
@@ -46,6 +54,8 @@ def atomic_write(path, data):
 
 
 class GamePack:
+    glyphs = {"i": "l", "l": "i", "rn": "m", "m": "rn", "vv": "w", "w": "vv"}
+    ambiguous_glyph = re.compile(r"rn|vv|[ilmw]")
     def __init__(self, folder):
         self.folder = folder
         self.tables = ({}, {})
@@ -68,39 +78,79 @@ class GamePack:
         self.tables = (obj["entries"], segments)
         self.status = "GTA 6 paketi v" + str(metadata["version"])
 
-    def sync(self):
-        cached = None
+    def restore(self):
+        index = self.folder / "current.json"
         try:
-            self.folder.mkdir(parents=True, exist_ok=True)
-            index = self.folder / "current.json"
-            if index.exists():
-                try:
-                    cached = json.loads(index.read_bytes())
-                    if not re.fullmatch("[0-9a-f]{64}", cached["sha256"]):
-                        raise ValueError()
-                    self.load((self.folder / cached["sha256"]).read_bytes(), cached)
-                    if 0 <= time.time() - index.stat().st_mtime < 86400:
-                        return
-                except (OSError, ValueError, KeyError, TypeError, EOFError):
-                    cached = None
-            catalog = json.loads(fetch(CATALOG, 4 * 1024 * 1024))
-            item = next(p for p in catalog["packs"] if p["id"] == "gta-6")
-            if not cached or item["sha256"] != cached["sha256"]:
-                data = fetch(CATALOG + "/gta-6", MAX_PACK)
-                self.load(data, item)
-                atomic_write(self.folder / item["sha256"], data)
-            atomic_write(index, json.dumps(item).encode())
-            if cached and item["sha256"] != cached["sha256"]:
-                (self.folder / cached["sha256"]).unlink(missing_ok=True)
-        except Exception:
-            if not self.tables[0]:
-                self.status = "GTA 6 paketi çevrimdışı veya kullanılamıyor"
+            cached = json.loads(index.read_bytes())
+            if not re.fullmatch("[0-9a-f]{64}", cached["sha256"]):
+                return None
+            self.load((self.folder / cached["sha256"]).read_bytes(), cached)
+            return cached
+        except (OSError, ValueError, KeyError, TypeError, EOFError):
+            return None
 
-    def lookup(self, text):
+    def refresh(self, cached):
+        index = self.folder / "current.json"
+        try:
+            if cached and 0 <= time.time() - index.stat().st_mtime < 86400:
+                return
+        except OSError:
+            pass
+        for endpoint in (CATALOG, MIRROR):
+            try:
+                self.folder.mkdir(parents=True, exist_ok=True)
+                catalog = json.loads(fetch(endpoint, 4 * 1024 * 1024))
+                item = next(p for p in catalog["packs"] if p["id"] == "gta-6")
+                if cached and int(item["version"]) < int(cached["version"]):
+                    continue
+                if not cached or item["sha256"] != cached["sha256"]:
+                    data = fetch(endpoint + "/gta-6", MAX_PACK)
+                    self.load(data, item)
+                    atomic_write(self.folder / item["sha256"], data)
+                atomic_write(index, json.dumps(item).encode())
+                if cached and item["sha256"] != cached["sha256"]:
+                    (self.folder / cached["sha256"]).unlink(missing_ok=True)
+                return
+            except (OSError, ValueError, KeyError, TypeError, StopIteration, EOFError):
+                continue
+        if not self.tables[0]:
+            self.status = "GTA 6 paketi çevrimdışı veya kullanılamıyor"
+
+    def sync(self):
+        self.refresh(self.restore())
+
+    def lookup(self, text, translate_missing=None):
         entries, segments = self.tables
+        if not entries and not segments:
+            return None
+
+        def find(code):
+            return entries.get(code) or segments.get(code)
+
         def match(line):
-            digest = key(line)
-            return entries.get(digest) or segments.get(digest)
+            return find(key(line))
+
+        def nearby(line):
+            normalized = normalize(line)
+            if not 24 <= len(normalized) <= 200 or len(normalized.split()) < 5:
+                return None
+            found = None
+            for word in re.finditer(r"(?<!\S)[a-z]{5,}(?!\S)", normalized):
+                letters = word.group()
+                for glyph in self.ambiguous_glyph.finditer(letters):
+                    # Change one interior glyph in one word. Short words such as
+                    # "no" and separate numbers never participate.
+                    if glyph.start() == 0 or glyph.end() == len(letters):
+                        continue
+                    start, end = (word.start() + i for i in glyph.span())
+                    candidate = normalized[:start] + self.glyphs[glyph.group()] + normalized[end:]
+                    translated = find(digest(candidate))
+                    if translated:
+                        if found is not None:
+                            return None
+                        found = translated
+            return found
+
         direct = match(text)
         if direct:
             return direct
@@ -108,11 +158,24 @@ class GamePack:
         body = speaker[2] if speaker else text
         translation = match(body) if speaker else None
         if not translation:
-            parts = re.split(r"(?<=[.!?…])\s+(?=[A-Z0-9])", body)
+            parts = re.split(r"\n+|(?<=[.!?…])\s+(?=[A-Z0-9])", body)
             if len(parts) > 1:
-                translated = [match(part) for part in parts]
-                if all(translated):
-                    translation = " ".join(translated)
+                matches = [match(part) for part in parts]
+                if all(matches):
+                    translation = " ".join(matches)
+            if not translation:
+                translation = nearby(text)
+                if translation:
+                    return translation
+                translation = nearby(body) if speaker else None
+            if not translation and len(parts) > 1:
+                matches = [value or nearby(part) for part, value in zip(parts, matches)]
+                missing = [i for i, value in enumerate(matches) if not value]
+                if len(missing) == 1 and translate_missing is not None:
+                    i = missing[0]
+                    matches[i] = translate_missing(parts[i])
+                if all(matches):
+                    translation = " ".join(matches)
         if speaker and translation:
             return speaker[1] + ": " + translation
         return translation
@@ -152,23 +215,39 @@ class Opus:
 
 def serve(warm_model=False):
     pack = GamePack(Path(os.environ["LOCALAPPDATA"]) / "Replik" / "packs")
-    threading.Thread(target=pack.sync, daemon=True).start()
     model = None
-    if warm_model:
+    model_lock = threading.Lock()
+
+    def get_model():
+        nonlocal model
+        with model_lock:
+            if model is None:
+                model = Opus()
+            return model
+
+    def warm():
         try:
-            model = Opus()
+            get_model()
         except Exception:
-            # Keep the protocol and pack available. A local request can retry loading.
+            # A local request can retry. Pack-only replies remain available.
             pass
+
+    if warm_model:
+        threading.Thread(target=warm).start()
+    cached = pack.restore()
+    threading.Thread(target=pack.refresh, args=(cached,), daemon=True).start()
+
+    def translate(text):
+        return get_model().translate(text)
+
     for line in sys.stdin.buffer:
         try:
             request = json.loads(line)
             text = base64.b64decode(request["line"]).decode("utf-8")
-            translated = pack.lookup(text) if request.get("pack", True) else None
+            translated = pack.lookup(text, translate if request["local"] else None) if request.get("pack", True) else None
             provider = "GTA 6 paketi"
             if not translated and request["local"]:
-                model = model or Opus()
-                translated = model.translate(text)
+                translated = translate(text)
                 provider = "OPUS-MT"
             reply = {"text": translated, "provider": provider, "pack": pack.status}
         except Exception as exc:

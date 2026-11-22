@@ -1,6 +1,9 @@
 import importlib.util
 import base64
+import gzip
+import hashlib
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -81,3 +84,39 @@ with tempfile.TemporaryDirectory() as tmp:
     second.tables = ({engine.key("Open the door!"): "Kapıyı aç!"}, {})
     assert second.lookup("Lucia: OPEN the door.") == "Lucia: Kapıyı aç!"
     assert second.lookup("A different sentence.") is None
+    source = "Keep to the middle of the road."
+    sentence = "Stay here."
+    entries = {engine.key(source): "Yolun ortasından git.", engine.key(sentence): "Burada kal."}
+    second.tables = (entries, {})
+    assert second.lookup("Keep to the middie of the road.") == "Yolun ortasından git."
+    assert second.lookup("Do not keep to the middle of the road.") is None
+    assert second.lookup("Keep to the middie of the raad.") is None
+    ambiguous = engine.key("Keep to the mlddie of the road.")
+    entries[ambiguous] = "Başka bir çeviri."
+    assert second.lookup("Keep to the middie of the road.") is None
+    del entries[ambiguous]
+    requests = []
+    def live(missing):
+        requests.append(missing)
+        return "Işığı kapat."
+    assert second.lookup("Stay here. Turn off the light.", live) == "Burada kal. Işığı kapat."
+    assert requests == ["Turn off the light."]
+    requests.clear()
+    assert second.lookup(source, live) == "Yolun ortasından git." and not requests
+
+    appdata = folder / "profile"
+    cache = appdata / "Replik" / "packs"
+    cache.mkdir(parents=True)
+    raw = json.dumps({"id": "gta-6", "format": 2, "entries": entries}).encode()
+    compressed = gzip.compress(raw)
+    sha = hashlib.sha256(compressed).hexdigest()
+    (cache / sha).write_bytes(compressed)
+    (cache / "current.json").write_text(json.dumps({"sha256": sha, "version": 8}), encoding="utf-8")
+    package_request = json.dumps({"line": base64.b64encode(source.encode()).decode(), "local": True}) + "\n"
+    with subprocess.Popen([sys.executable, "-B", "-u", str(base / "translate.py"), "--warm-model"],
+                          stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                          env={**os.environ, "LOCALAPPDATA": str(appdata)}) as worker:
+        replies, _ = worker.communicate(package_request.encode(), timeout=90)
+        reply = json.loads(replies)
+        assert worker.returncode == 0 and reply["provider"] == "GTA 6 paketi" and reply["text"] == entries[engine.key(source)], replies
+    print("Ready pack, bounded OCR corrections, ambiguity and local fallback verified.")

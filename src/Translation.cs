@@ -111,7 +111,7 @@ namespace Replik {
                 local?"opus-mt":"gemini",gtaMode?"bottom":fraction==Desktop.Bands[1]?"middle":"top",OcrSettings.SampleInterval);
             using (var requests=CancellationTokenSource.CreateLinkedTokenSource(token))
             using (var reader=new Reader(requests.Token,PaddleModel.Find(ocrSettings.Model)))
-            using (var worker=new LocalTranslator(requests.Token)) {
+            using (var worker=new LocalTranslator(requests.Token,gtaMode)) {
                 var clock=System.Diagnostics.Stopwatch.StartNew();
                 var gate=new OcrChangeGate(ocrSettings);
                 var fallback=new GeminiFallback((text,ct)=>Gemini.Translate(key,model,text,ct),

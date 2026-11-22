@@ -125,7 +125,7 @@ with tempfile.TemporaryDirectory() as tmp:
     print("Ready pack, bounded OCR corrections, ambiguity and local fallback verified.")
 
     reference = EnglishReference(appdata / "Replik" / "english-reference")
-    reference.directory.mkdir(parents=True)
+    reference.directory.mkdir(parents=True, exist_ok=True)
     tsv = folder / "source.tsv"
     tsv.write_text(
         "category\ten\n"

@@ -214,7 +214,7 @@ class Opus:
         return result
 
 
-def serve(warm_model=False):
+def serve(warm_model=False, prepare_reference=False):
     pack = GamePack(Path(os.environ["LOCALAPPDATA"]) / "Replik" / "packs")
     reference = EnglishReference(reference_folder())
     model = None
@@ -238,7 +238,8 @@ def serve(warm_model=False):
         threading.Thread(target=warm).start()
     cached = pack.restore()
     threading.Thread(target=pack.refresh, args=(cached,), daemon=True).start()
-    threading.Thread(target=reference.prepare, daemon=True).start()
+    if prepare_reference:
+        threading.Thread(target=reference.prepare, daemon=True).start()
 
     def translate(text):
         return get_model().translate(text)
@@ -265,4 +266,4 @@ if __name__ == "__main__":
     if sys.argv[1:] == ["--sync-pack"]:
         GamePack(Path(os.environ["LOCALAPPDATA"]) / "Replik" / "packs").sync()
     else:
-        serve("--warm-model" in sys.argv[1:])
+        serve("--warm-model" in sys.argv[1:], "--prepare-reference" in sys.argv[1:])

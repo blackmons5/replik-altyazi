@@ -20,7 +20,8 @@ namespace Replik {
         protected override CreateParams CreateParams {get {var p=base.CreateParams; p.ExStyle|=0x08000000|0x20|0x80; return p;}}
         internal void Place(string line,Rectangle window,Rectangle area,float lineHeight) {
             if(line.Length==0 || window.Width<160) {Hide(); return;}
-            if(Visible && line==last && window==previousWindow && area==previousArea && lineHeight==previousHeight) return;
+            if(Visible && line==last && window==previousWindow &&
+                ((area==previousArea && lineHeight==previousHeight) || SameAnchor(previousArea,previousHeight,area,lineHeight))) return;
             if(card==null || line!=last || window.Size!=previousWindow.Size || lineHeight!=previousHeight) {
                 var next=Render(line,window.Size,lineHeight);
                 if(card!=null) card.Dispose();
@@ -34,6 +35,13 @@ namespace Replik {
             Bounds=position;
             if(!Visible) Show();
             Invalidate();
+        }
+        internal static bool SameAnchor(Rectangle previous,float previousHeight,Rectangle next,float nextHeight) {
+            if(previousHeight<=0 || nextHeight<=0) return false;
+            int tolerance=Math.Max(2,(int)Math.Round(previousHeight*.28f));
+            return Math.Abs(next.Top-previous.Top)<=tolerance &&
+                Math.Abs((next.Left+next.Width/2)-(previous.Left+previous.Width/2))<=tolerance &&
+                Math.Abs(nextHeight-previousHeight)<=tolerance;
         }
         internal static Rectangle Placement(Rectangle window,Rectangle source,Size caption,int gap) {
             int x=Math.Max(window.Left,Math.Min(window.Right-caption.Width,source.Left+(source.Width-caption.Width)/2));

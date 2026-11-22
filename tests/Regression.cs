@@ -392,6 +392,11 @@ namespace Replik {
             Check(Target.PlayerName("Veyra") && Target.PlayerName("NRVideo") && Target.PlayerName("RemotePlay") && !Target.PlayerName("chrome"),"Automatic player matching");
             var region=Desktop.Pixels(new Rectangle(-1920,0,1920,1080),new RectangleF(80f/1920,710f/1080,620f/1920,90f/1080));
             Check(region==new Rectangle(-1840,710,620,90),"Second monitor crop");
+            var anchorBox=new Rectangle(-1750,780,270,16);
+            Check(Caption.SameAnchor(anchorBox,16,new Rectangle(-1752,783,276,18),18),
+                "Discard small OCR movement and size changes on a displayed caption");
+            Check(!Caption.SameAnchor(anchorBox,16,new Rectangle(-1750,798,270,16),16),
+                "A substantial change still moves the caption");
             using(var shortLine=Caption.Render("Gel!",source.Size))
             using(var longer=Caption.Render("Lucia: Arabaya bin ve kapıyı kapat.",source.Size)) {
                 Check(shortLine.Width<longer.Width && shortLine.GetPixel(0,0).A<20,"Rounded content-width card");

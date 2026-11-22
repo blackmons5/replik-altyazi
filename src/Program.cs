@@ -11,7 +11,11 @@ using System.Windows.Forms;
 
 namespace Replik {
     static class Program {
-        [STAThread] static void Main() {
+        [STAThread] static void Main(string[] args) {
+            if(args.Length==2 && args[0]=="--clean-update-cache") {
+                Updates.CleanAfterInstall(args[1]);
+                return;
+            }
             DiagnosticsLog.Local.Startup();
             Desktop.SetProcessDpiAwarenessContext(new IntPtr(-4));
             Environment.SetEnvironmentVariable("OMP_THREAD_LIMIT","1");
@@ -35,6 +39,7 @@ namespace Replik {
         readonly Label lastSource=new Label(), lastTranslation=new Label();
         readonly Label latency=new Label();
         readonly Button update=new Button();
+        readonly LinkLabel cleanCache=new LinkLabel {Text="Güncelleme önbelleğini temizle"};
         readonly Button ocrButton=new Button();
         OcrSettings ocrSettings=OcrSettings.Load();
         readonly System.Windows.Forms.Timer updateTimer=new System.Windows.Forms.Timer {Interval=6*60*60*1000};
@@ -47,14 +52,15 @@ namespace Replik {
         Target target;
         bool closing;
         public Dashboard() {
-            Text="Replik • Oyun altyazısı"; Font=new Font("Segoe UI",10);
+            Text="AccelSubs • Oyun altyazısı"; Font=new Font("Segoe UI",10);
             AutoScaleMode=AutoScaleMode.Dpi; AutoScaleDimensions=new SizeF(96,96);
-            StartPosition=FormStartPosition.CenterScreen; ClientSize=new Size(530,638);
+            StartPosition=FormStartPosition.CenterScreen; ClientSize=new Size(530,665);
             FormBorderStyle=FormBorderStyle.FixedSingle; MaximizeBox=false; BackColor=Color.FromArgb(247,248,250);
-            var title=LabelAt("Replik",24,16,450,42); title.Font=new Font(Font.FontFamily,24,FontStyle.Bold);
+            var title=LabelAt("AccelSubs",24,16,450,42); title.Font=new Font(Font.FontFamily,24,FontStyle.Bold);
             Put(update,275,23,229,32); update.Text="Güncellemeleri denetle"; update.BringToFront();
             update.Click+=async delegate { if(offer==null) await CheckUpdates(true); else await InstallUpdate(); };
             Shown+=async delegate { updateTimer.Start(); await CheckUpdates(false); };
+            Shown+=async delegate { await Task.Run(()=>Updates.CleanCache(DateTime.UtcNow.AddDays(-1))); };
             updateTimer.Tick+=async delegate { await CheckUpdates(false); };
             LabelAt("İngilizce oyun altyazısı  →  Türkçe",26,60,480,26);
             LabelAt("Oyun penceresi",26,103,230,25);
@@ -80,6 +86,8 @@ namespace Replik {
             foreach(Control c in new Control[]{keyLabel,key,modelLabel,model,start,status,lastSource,lastTranslation,latency}) c.Top+=48;
             var diagnostics=new LinkLabel {Text="Tanı günlüğünü aç"};
             Put(diagnostics,26,604,275,25);
+            Put(cleanCache,26,632,310,25);
+            cleanCache.LinkClicked+=async delegate { await ClearUpdateCache(); };
             Put(ocrButton,334,598,170,32);
             ocrButton.Text="OCR ayarları";
             ocrButton.Click+=delegate {
@@ -121,15 +129,31 @@ namespace Replik {
         }
         async Task InstallUpdate() {
             if(downloading || checking || closing) return;
-            downloading=true; update.Enabled=false;
+            downloading=true; update.Enabled=cleanCache.Enabled=false;
+            string path=null;
+            bool launched=false;
             try {
-                string path=await Updates.Download(offer,new Progress<int>(p=>{if(!closing) update.Text="Güncelleme indiriliyor %"+p;}),lifetime.Token);
+                path=await Updates.Download(offer,new Progress<int>(p=>{if(!closing) update.Text="Güncelleme indiriliyor %"+p;}),lifetime.Token);
                 if(closing) return;
-                Process.Start(new ProcessStartInfo(path){UseShellExecute=true});
+                using(Process.Start(new ProcessStartInfo(path){UseShellExecute=true})) {}
+                launched=true;
                 Close();
             } catch(Exception ex) {
                 if(!closing) {update.Text="Güncellemeyi tekrar dene"; MessageBox.Show(this,ex.Message,"Güncelleme");}
-            } finally {downloading=false; if(!closing) update.Enabled=true;}
+            } finally {
+                if(path!=null && !launched) Updates.RemoveDownload(path);
+                downloading=false;
+                if(!closing) update.Enabled=cleanCache.Enabled=true;
+            }
+        }
+        async Task ClearUpdateCache() {
+            if(downloading || closing) return;
+            cleanCache.Enabled=false;
+            long freed=await Task.Run(()=>Updates.CleanCache(DateTime.UtcNow.AddMinutes(-1)));
+            if(closing) return;
+            cleanCache.Enabled=!downloading;
+            string message=freed>0?string.Format("{0:N2} MB yer açıldı.",freed/1000000.0):"Temizlenecek eski güncelleme dosyası bulunamadı.";
+            MessageBox.Show(this,message,"Güncelleme önbelleği",MessageBoxButtons.OK,MessageBoxIcon.Information);
         }
         void Put(Control c,int x,int y,int w,int h) { c.SetBounds(x,y,w,h); Controls.Add(c); }
         Label LabelAt(string text,int x,int y,int w,int h) { var l=new Label {Text=text}; Put(l,x,y,w,h); return l; }

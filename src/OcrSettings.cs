@@ -194,7 +194,7 @@ namespace Replik {
             fetch.Enabled=fetch.Visible;
             save.Enabled=available;
             modelStatus.Text=available?(model.Bundled?"Kuruluma dahil • İngilizce, Japonca, Çince":"Model hazır"):
-                (model.Bundled?"Model dosyaları eksik. Replik kurulumunu yeniden çalıştır.":"Bu model için İndir düğmesini kullan.");
+                (model.Bundled?"Model dosyaları eksik. AccelSubs kurulumunu yeniden çalıştır.":"Bu model için İndir düğmesini kullan.");
         }
         void AddRow(string caption,Control field,int y) {
             var label=new Label {Text=caption,Location=new Point(16,y+4),Size=new Size(213,25)};

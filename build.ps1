@@ -1,4 +1,4 @@
-param([string]$Compiler = 'ISCC.exe', [switch]$BuildOnly, [switch]$PackageOnly)
+param([string]$Compiler = 'ISCC.exe', [switch]$BuildOnly, [switch]$PackageOnly, [ValidatePattern('^\d+\.\d+\.\d+$')][string]$CachePatchFrom)
 $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
 $version=(Get-Content version.txt -Raw).Trim()
@@ -68,3 +68,7 @@ if ($BuildOnly) { return }
 if ($LASTEXITCODE) { throw 'Installer compilation failed' }
 & $Compiler "/DAppVer=$version" /DPatch=1 setup.iss
 if ($LASTEXITCODE) { throw 'Update compilation failed' }
+if ($CachePatchFrom) {
+    & $Compiler "/DAppVer=$version" /DPatch=1 "/DCachePatchFrom=$CachePatchFrom" setup.iss
+    if ($LASTEXITCODE) { throw 'Cache update compilation failed' }
+}

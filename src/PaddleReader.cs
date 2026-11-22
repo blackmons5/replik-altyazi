@@ -41,7 +41,7 @@ namespace Replik {
                 RedirectStandardInput=true, RedirectStandardOutput=true
             };
             try {worker=Process.Start(start);}
-            catch(Win32Exception ex) {throw new IOException("PaddleOCR başlatılamadı. Replik kurulumunu yeniden çalıştır.",ex);}
+            catch(Win32Exception ex) {throw new IOException("PaddleOCR başlatılamadı. AccelSubs kurulumunu yeniden çalıştır.",ex);}
             stop=token.Register(Kill);
         }
 
@@ -68,10 +68,10 @@ namespace Replik {
                 }
             } catch(IOException ex) {
                 token.ThrowIfCancellationRequested();
-                throw new IOException("PaddleOCR bağlantısı kesildi. Replik kurulumunu yeniden çalıştır.",ex);
+                throw new IOException("PaddleOCR bağlantısı kesildi. AccelSubs kurulumunu yeniden çalıştır.",ex);
             }
             token.ThrowIfCancellationRequested();
-            throw new IOException("PaddleOCR kapandı. Replik kurulumunu yeniden çalıştır.");
+            throw new IOException("PaddleOCR kapandı. AccelSubs kurulumunu yeniden çalıştır.");
         }
 
         async Task<string> Exchange(byte[] request) {

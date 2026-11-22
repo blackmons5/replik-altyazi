@@ -57,8 +57,8 @@ namespace Replik {
             path.CloseFigure(); return path;
         }
         internal static Bitmap Render(string line,Size window,float lineHeight=0) {
-            float pixels=lineHeight>0?Math.Max(11,Math.Min(52,lineHeight*1.28f)):Math.Max(15,Math.Min(52,window.Height*.028f));
-            int padX=(int)Math.Ceiling(pixels*.43),padY=(int)Math.Ceiling(pixels*.14);
+            float pixels=lineHeight>0?Math.Max(11,Math.Min(52,lineHeight*1.12f)):Math.Max(15,Math.Min(52,window.Height*.028f));
+            int padX=(int)Math.Ceiling(pixels*.43),padY=(int)Math.Ceiling(pixels*.10);
             int max=Math.Max(72,(int)(window.Width*.88)-2*padX);
             using(var font=new Font("Segoe UI",pixels,FontStyle.Regular,GraphicsUnit.Pixel))
             using(var format=new StringFormat {Alignment=StringAlignment.Center,LineAlignment=StringAlignment.Center})

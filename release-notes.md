@@ -1,6 +1,5 @@
-## AccelSubs 1.0.32
+## AccelSubs 1.0.33
 
-- GTA 6 İngilizce referansı ilk kurulum veya güncelleme sonrasında otomatik hazırlanır. Alt bölgedeki uzun repliklerde tek bir güvenilir eşleşme bulunursa yaygın OCR harf hataları çeviriden önce düzeltilir.
-- Türkçe altyazı, PaddleOCR'ın tanıdığı İngilizce satırın hemen üstünde ve ortasında gösterilir. Yazı boyutu okunan harflerin yüksekliğine göre ayarlanır.
-- İlk hazırlık, İngilizce metin kaynağından arka planda 72 MB indirir. Normal çeviri bu sırada kullanılabilir ve hazır sözlük sonrasında çevrimdışı çalışır.
-- AccelSubs 1.0.31 kuruluysa küçük güncellemeyi, ilk kurulum için tam EXE'yi kullan.
+- Altyazı kısa bir OCR kesintisinde ekranda kalır. Görünen satır, okuma kesildikten sonra 1,2 saniye korunur. Geç gelen çeviriye en az 850 ms okuma süresi verilir.
+- Tek bir belirsiz OCR okuması ekrandaki çeviriyi gizlemez. Yeni İngilizce replik doğrulandığında altyazı normal şekilde değişir.
+- AccelSubs 1.0.32 kuruluysa küçük güncellemeyi, ilk kurulum için tam EXE'yi kullan.

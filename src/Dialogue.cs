@@ -16,6 +16,7 @@ namespace Replik {
             internal string Text;
             internal float Confidence;
             internal long Seen,LastSeen;
+            internal SubtitleAnchor Anchor;
         }
         sealed class Job : IDisposable {
             internal Cue Cue;
@@ -32,6 +33,7 @@ namespace Replik {
         string shown="",uncertain="";
         bool hideForChange;
         long uncertainSeen,blankSince=-1,shownAt;
+        internal SubtitleAnchor VisibleAnchor {get {return visibleCue==null?default(SubtitleAnchor):visibleCue.Anchor;}}
 
         public Dialogue(Func<string,Task<string>> translate) : this((text,token)=>translate(text)) {}
         public Dialogue(Func<string,CancellationToken,Task<string>> translate,int textDifference=3) {
@@ -49,7 +51,7 @@ namespace Replik {
             return MatchesText(text,cue.Text,Math.Min(confidence,cue.Confidence)<.88f) ||
                 (textDifference>0 && SubtitleText.IsClippedRead(text,cue.Text));
         }
-        internal void Observe(string text,float confidence,long now,bool gtaRow=false) {
+        internal void Observe(string text,float confidence,long now,bool gtaRow=false,SubtitleAnchor anchor=default(SubtitleAnchor)) {
             text=SubtitleText.Clean(text);
             if(text.Length==0 || confidence<.55f) {
                 if(now-uncertainSeen>ConfirmationWindow) uncertain="";
@@ -59,6 +61,7 @@ namespace Replik {
             if(captured!=null && (blankSince<0 || now-captured.LastSeen<=ReturnWindow) &&
                 MatchesCapture(text,confidence,captured,now)) {
                 captured.LastSeen=now;
+                captured.Anchor=anchor;
                 blankSince=-1;
                 uncertain="";
                 hideForChange=false;
@@ -67,6 +70,7 @@ namespace Replik {
             if(earlierCapture!=null && earlierCapture.Text.Length>=12 && now-captured.Seen<=350 &&
                 now-earlierCapture.LastSeen<=ReturnWindow && MatchesCapture(text,confidence,earlierCapture,now)) {
                 earlierCapture.LastSeen=now;
+                earlierCapture.Anchor=anchor;
                 var intervening=captured;
                 captured=earlierCapture;
                 earlierCapture=intervening;
@@ -94,7 +98,7 @@ namespace Replik {
             hideForChange=false;
             blankSince=-1;
             earlierCapture=captured;
-            captured=new Cue {Text=text,Confidence=confidence,Seen=now,LastSeen=now};
+            captured=new Cue {Text=text,Confidence=confidence,Seen=now,LastSeen=now,Anchor=anchor};
         }
         void RetirePending() {
             if(pending==null) return;

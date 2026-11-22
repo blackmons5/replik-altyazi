@@ -11,6 +11,10 @@ AccelSubs (eski adıyla Replik), Windows 10 (2004 ve üzeri) ve Windows 11 x64 i
 
 CouchSubs GTA 6 topluluk paketi tam kurulum ve küçük güncelleme sırasında resmî sunucudan alınır ve doğrulanır. Hazır Türkçe eşleşmeler ilk sıradadır. Pakette bulunmayan satırları varsayılan yerel OPUS-MT veya seçili Gemini çevirir. [Paket kaynağı](https://github.com/yorulmazsinan/couchsubs/tree/main/server/packs)
 
+AccelSubs, GTA alt bölgesinde OCR hatalarını düzeltmek için İngilizce referansı kurulumdan sonra arka planda hazırlar. İlk hazırlık tek seferlik 72 MB indirme gerektirir. AccelSubs yalnız tek ve güvenilir bir eşleşme bulduğunda uzun bir satırdaki harf hatasını düzeltir. Yerel sözlük hazırlanıncaya kadar çeviri devam eder. [İngilizce metin kaynağı](https://github.com/psviethoa/gta6-text-en)
+
+Türkçe kutu, okunan İngilizce satırın hemen üstüne konur. Yazı boyutu, oyunda görülen harflerin yüksekliğine göre ayarlanır.
+
 API anahtarı oturum boyunca bellekte tutulur. Seçilen ekran bölgesi yerel olarak okunur. Yalnızca Gemini seçiliyken pakette bulunamayan metinler Google'a gönderilir. Gemini zamanında kullanılabilir bir sonuç vermezse Replik yerel OPUS-MT modelini dener. Tekrarlanan satırlar oturum içinde önbellekten gösterilir.
 
 **Tanı günlüğünü aç** bağlantısı, yakalama, OCR ve çeviri durumunu bilgisayarda tutulan bir dosyada gösterir. Günlüğe altyazı metni, ekran görüntüsü veya API anahtarı yazılmaz.
@@ -30,7 +34,7 @@ flowchart LR
 
 ### Uygulama güncellemeleri
 
-AccelSubs ve Replik 0.2.1 veya daha yeni sürümler, açılışta ve açık kaldığı sürece altı saatte bir GitHub’da güncelleme arar. Sağ üstteki **Güncelle** düğmesi indirilen dosyayı doğrular ve kurulum sihirbazını açar. Replik 0.2.19 kuruluysa Releases sayfasındaki küçük **AccelSubs-Guncelleme-1.0.31-x64.exe** dosyasıyla yükseltebilirsin.
+AccelSubs ve Replik 0.2.1 veya daha yeni sürümler, açılışta ve açık kaldığı sürece altı saatte bir GitHub’da güncelleme arar. Sağ üstteki **Güncelle** düğmesi indirilen dosyayı doğrular ve kurulum sihirbazını açar. AccelSubs 1.0.31 kuruluysa Releases sayfasındaki küçük **AccelSubs-Guncelleme-1.0.32-x64.exe** dosyasıyla yükseltebilirsin.
 
 **Güncelleme önbelleğini temizle** bağlantısı, eski kurulum dosyalarını ve yarım kalan indirmeleri siler. Kurulum tamamlandığında temizlik otomatik olarak da çalışır.
 

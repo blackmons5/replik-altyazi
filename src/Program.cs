@@ -49,6 +49,8 @@ namespace Replik {
         RectangleF fraction;
         CancellationTokenSource running;
         string caption="";
+        SubtitleAnchor subtitleAnchor;
+        volatile CaptionSnapshot renderedCaption;
         Target target;
         bool closing;
         public Dashboard() {
@@ -166,10 +168,14 @@ namespace Replik {
         }
         void PositionCaption() {
             var h=target==null?IntPtr.Zero:target.ActiveWindow();
-            if (h==IntPtr.Zero) {overlay.Hide(); return;}
+            if(h==IntPtr.Zero || caption.Length==0) {overlay.Hide(); renderedCaption=null; return;}
             var bounds=Desktop.Bounds(h);
             var captureBand=fraction==Desktop.Bands[0]?Desktop.WideGtaBand:fraction;
-            overlay.Place(caption,bounds,Desktop.Pixels(bounds,captureBand));
+            bool anchored=subtitleAnchor.Window==h;
+            var source=Desktop.Pixels(bounds,anchored?subtitleAnchor.Bounds:captureBand);
+            float lineHeight=anchored?(float)Math.Round(bounds.Height*subtitleAnchor.LineHeight):0;
+            overlay.Place(caption,bounds,source,lineHeight);
+            renderedCaption=overlay.Visible?new CaptionSnapshot(overlay.Bounds,caption):null;
         }
         async Task Toggle() {
             if (running!=null) { running.Cancel(); start.Enabled=false; return; }
@@ -185,10 +191,11 @@ namespace Replik {
             fraction=Desktop.Bands[presets.SelectedIndex];
             lastSource.Text="Okunan İngilizce: —"; lastTranslation.Text="Türkçe: —";
             if(target.Handle!=IntPtr.Zero) Desktop.SetForegroundWindow(target.Handle);
-            var progress=new Progress<Tuple<string,string>>(v=>{
+            var progress=new Progress<Tuple<string,string,SubtitleAnchor>>(v=>{
                 if (closing || running!=source || source.IsCancellationRequested) return;
-                status.Text=v.Item1;
+                if(v.Item1!=null) status.Text=v.Item1;
                 if (v.Item2!=null) {caption=v.Item2; if(caption.Length>0) lastTranslation.Text="Türkçe: "+caption;}
+                if(v.Item2!=null || v.Item1==null) subtitleAnchor=v.Item3;
                 PositionCaption();
             });
             var reads=new Progress<string>(line=>{if(!closing && running==source) lastSource.Text="Okunan İngilizce: "+line;});
@@ -200,7 +207,8 @@ namespace Replik {
                 latency.Text="Son ölçümler  •  Görüntü ve OCR: "+ocrTime+"  •  Çeviri: "+apiTime;
             });
             var session=new Session(target,fraction,apiKey,modelId,local,ocrSettings,line=>((IProgress<string>)reads).Report(line),
-                (ocr,api)=>metrics.Report(Tuple.Create(ocr,api)),(s,c)=>((IProgress<Tuple<string,string>>)progress).Report(Tuple.Create(s,c)));
+                (ocr,api)=>metrics.Report(Tuple.Create(ocr,api)),
+                (s,c,a)=>((IProgress<Tuple<string,string,SubtitleAnchor>>)progress).Report(Tuple.Create(s,c,a)),()=>renderedCaption);
             string result="Çeviri durduruldu.";
             try { await Task.Run(()=>session.Run(source.Token)); }
             catch (OperationCanceledException) { if (!source.IsCancellationRequested) result="Gemini yanıt süresi doldu. Yeniden başlat."; }
@@ -211,7 +219,7 @@ namespace Replik {
             finally {
                 running=null; source.Dispose();
                 if (!closing) {
-                    positioning.Stop(); overlay.Hide(); caption=""; status.Text=result;
+                    positioning.Stop(); overlay.Hide(); caption=""; renderedCaption=null; status.Text=result;
                     start.Enabled=ocrButton.Enabled=engine.Enabled=presets.Enabled=windows.Enabled=refresh.Enabled=true;
                     model.Enabled=key.Enabled=!local; start.Text="Çeviriyi başlat";
                 }

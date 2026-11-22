@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
@@ -10,13 +11,14 @@ using System.Windows.Forms;
 // known English subtitle, and all capture, translation and overlay code is
 // loaded from the installed program.
 static class InstalledCaption {
+    [DllImport("user32")] static extern bool ClientToScreen(IntPtr window,ref Point point);
     static T Field<T>(Form window,string name) {
         return (T)window.GetType().GetField(name,BindingFlags.NonPublic|BindingFlags.Instance).GetValue(window);
     }
 
     const string Title="Replik subtitle test window";
 
-    static async Task ReadCaption(Form dashboard) {
+    static async Task ReadCaption(Form dashboard,IntPtr scene) {
         var windows=Field<ComboBox>(dashboard,"windows");
         int index=windows.FindStringExact(Title);
         if(index<0) throw new Exception("Target window missing from the installed dashboard");
@@ -27,10 +29,21 @@ static class InstalledCaption {
         var turkish=Field<Label>(dashboard,"lastTranslation");
         while(clock.Elapsed.TotalSeconds<65) {
             await Task.Delay(100);
+            var overlay=Field<Form>(dashboard,"overlay");
             if(source.Text.IndexOf("Thank you",StringComparison.OrdinalIgnoreCase)>=0 &&
                 turkish.Text.IndexOf("teşekkür",StringComparison.OrdinalIgnoreCase)>=0 &&
-                Field<Form>(dashboard,"overlay").Visible) {
+                overlay.Visible) {
+                var origin=Point.Empty;
+                if(!ClientToScreen(scene,ref origin)) throw new Exception("Could not measure subtitle scene");
+                await Task.Delay(350);
+                var box=overlay.Bounds;
+                if(!overlay.Visible || box.Bottom<origin.Y+350 || box.Bottom>origin.Y+367 ||
+                    Math.Abs(box.Left+box.Width/2-(origin.X+380))>16 || box.Height>30)
+                    throw new Exception("Caption did not sit just above the original subtitle: "+box+" / "+origin);
+                if(source.Text.IndexOf("Thank you",StringComparison.OrdinalIgnoreCase)<0)
+                    throw new Exception("Caption was read back by OCR");
                 Console.WriteLine("Installed OCR, translation and visible caption: "+source.Text+" / "+turkish.Text);
+                Console.WriteLine("Installed overlay is anchored directly above the English line.");
                 return;
             }
         }
@@ -63,7 +76,7 @@ static class InstalledCaption {
                 }
                 using(var dashboard=(Form)Activator.CreateInstance(assembly.GetType("Replik.Dashboard",true))) {
                     dashboard.Shown+=async delegate {
-                        try {await ReadCaption(dashboard); exitCode=0;}
+                        try {await ReadCaption(dashboard,scene.MainWindowHandle); exitCode=0;}
                         catch(Exception ex) {Console.Error.WriteLine(ex);}
                         finally {dashboard.Close();}
                     };

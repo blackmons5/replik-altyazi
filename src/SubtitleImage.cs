@@ -94,7 +94,8 @@ namespace Replik {
             return brightMask;
         }
 
-        internal bool HasSubtitleStrokes(Rectangle bounds) {
+        internal bool HasSubtitleStrokes(Rectangle bounds,out Rectangle inkBounds) {
+            inkBounds=Rectangle.Empty;
             var mask=BrightMask();
             bounds=Rectangle.Intersect(bounds,new Rectangle(Point.Empty,Size));
             int size=bounds.Width*bounds.Height;
@@ -134,7 +135,9 @@ namespace Replik {
                     if(saturated[i] && saturated[i-colorSpan] && saturated[i+colorSpan]) colored++;
                 }
             }
-            return colored<=Math.Max(size*.035,ink*.27);
+            if(colored>Math.Max(size*.035,ink*.27)) return false;
+            inkBounds=Rectangle.FromLTRB(bounds.Left,top,bounds.Right,bottom+1);
+            return true;
         }
 
         byte[] LocalThreshold() {

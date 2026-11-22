@@ -108,9 +108,10 @@ namespace Replik {
                 if(top<0) top=y;
                 bottom=y;
             }
-            if(top<0 || ink<size*.055 || ink>size*.57) return false;
+            int glyphHeight=bottom-top+1;
+            if(top<0 || glyphHeight<height*.052 || glyphHeight>height*.31 || ink<size*.055 || ink>size*.57) return false;
             // Base the stroke test on the visible neutral glyphs, since a colored word can enlarge the OCR box.
-            int thick=0,radius=Math.Max(1,(int)Math.Ceiling((bottom-top+1)*.08));
+            int thick=0,radius=Math.Max(1,(int)Math.Ceiling(glyphHeight*.08));
             for(int y=bounds.Top;y<bounds.Bottom;y++) {
                 for(int x=bounds.Left;x<bounds.Right;x++) {
                     int i=y*width+x;

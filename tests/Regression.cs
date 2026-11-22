@@ -187,7 +187,10 @@ namespace Replik {
                 using(var crop=screen.Clone(wide,screen.PixelFormat)) {
                     float score;
                     var text=reader.Read(crop,out score,true);
-                    Check(text.Contains("other side of the bridge") && text.Contains("wait for your signal"),"Read both rows in a wider subtitle: "+text);
+                    if(!text.Contains("other side of the bridge") || !text.Contains("wait for your signal")) {
+                        var raw=reader.Read(crop,out score);
+                        throw new Exception("Read both rows in a wider subtitle: '"+text+"'. Unfiltered OCR: '"+raw+"'.");
+                    }
                 }
             }
             using(var sample=new Bitmap(120,40))

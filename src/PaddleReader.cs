@@ -109,8 +109,7 @@ namespace Replik {
         static bool HasSubtitleShape(SubtitleImage image,Rectangle box,Size source) {
             double centerX=(box.Left+box.Width*.5)/source.Width;
             double centerY=(box.Top+box.Height*.5)/source.Height;
-            double height=(double)box.Height/source.Height;
-            if(centerX<.36 || centerX>.64 || centerY<.10 || centerY>.90 || height<.055 || height>.32) return false;
+            if(centerX<.36 || centerX>.64 || centerY<.10 || centerY>.90) return false;
             return image.HasSubtitleStrokes(Rectangle.FromLTRB(
                 box.Left*image.Size.Width/source.Width,box.Top*image.Size.Height/source.Height,
                 box.Right*image.Size.Width/source.Width,box.Bottom*image.Size.Height/source.Height));

@@ -50,6 +50,8 @@ Source: "build\app\local\runtime-id.txt"; DestDir: "{app}\local"; Flags: ignorev
 Source: "build\app\local\*"; DestDir: "{app}\local"; Flags: recursesubdirs ignoreversion
 Source: "build\inputs\VC_redist.x64.exe"; DestDir: "{tmp}"; Flags: dontcopy
 #endif
+#else
+Source: "build\app\ocr\read.py"; DestDir: "{app}\ocr"; Flags: ignoreversion
 #endif
 
 [InstallDelete]

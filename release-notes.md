@@ -1,6 +1,5 @@
-## AccelSubs 1.0.33
+## AccelSubs 1.0.34
 
-- Altyazı kısa bir OCR kesintisinde ekranda kalır. Görünen satır, okuma kesildikten sonra 1,2 saniye korunur. Geç gelen çeviriye en az 850 ms okuma süresi verilir.
-- Tek bir belirsiz OCR okuması ekrandaki çeviriyi gizlemez. Yeni İngilizce replik doğrulandığında altyazı normal şekilde değişir.
-- Aynı replik görünürken OCR ölçümündeki birkaç piksellik fark kutunun yerini veya yazı boyutunu değiştirmez.
-- AccelSubs 1.0.32 kuruluysa küçük güncellemeyi, ilk kurulum için tam EXE'yi kullan.
+- GTA alt altyazı bölgesinde İngilizce replik eşleştirmesi çeviriden önce yapılır. Aynı repliğe eşleşen OCR okumaları tek çeviriyi paylaşır.
+- Kısa ve belirsiz okumalar olduğu gibi işlenir. Referans paketi hazırlanırken de çeviri devam eder.
+- 1.0.33 kuruluysa küçük güncellemeyi kullanabilirsin.

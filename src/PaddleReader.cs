@@ -117,7 +117,15 @@ namespace Replik {
             confidence=rows.Average(r=>r.Confidence);
             subtitle=rows.Select(r=>r.Ink).Aggregate(Rectangle.Union);
             lineHeight=(float)rows.Average(r=>r.Ink.Height);
-            return joined;
+            if(!gtaMode) return joined;
+            // Resolve the full selected subtitle before the dialogue tracker sees it.
+            var request=Encoding.ASCII.GetBytes("line "+Convert.ToBase64String(Encoding.UTF8.GetBytes(joined))+"\n");
+            var reply=Exchange(request).GetAwaiter().GetResult();
+            token.ThrowIfCancellationRequested();
+            if(reply==null) throw new IOException("PaddleOCR bağlantısı kesildi.");
+            var matched=json.Deserialize<string>(reply);
+            if(matched!=joined) DiagnosticsLog.Local.Write("ocr.reference_match");
+            return matched;
         }
 
         static bool HasSubtitleShape(SubtitleImage image,Rectangle box,Size source,out Rectangle ink) {

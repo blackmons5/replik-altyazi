@@ -34,7 +34,7 @@ flowchart LR
 
 ### Uygulama güncellemeleri
 
-AccelSubs ve Replik 0.2.1 veya daha yeni sürümler, açılışta ve açık kaldığı sürece altı saatte bir GitHub’da güncelleme arar. Sağ üstteki **Güncelle** düğmesi indirilen dosyayı doğrular ve kurulum sihirbazını açar. AccelSubs 1.0.32 kuruluysa Releases sayfasındaki küçük **AccelSubs-Guncelleme-1.0.33-x64.exe** dosyasıyla yükseltebilirsin.
+AccelSubs ve Replik 0.2.1 veya daha yeni sürümler, açılışta ve açık kaldığı sürece altı saatte bir GitHub’da güncelleme arar. Sağ üstteki **Güncelle** düğmesi indirilen dosyayı doğrular ve kurulum sihirbazını açar. AccelSubs 1.0.33 kuruluysa Releases sayfasındaki küçük **AccelSubs-Guncelleme-1.0.34-x64.exe** dosyasıyla yükseltebilirsin.
 
 **Güncelleme önbelleğini temizle** bağlantısı, eski kurulum dosyalarını ve yarım kalan indirmeleri siler. Kurulum tamamlandığında temizlik otomatik olarak da çalışır.
 

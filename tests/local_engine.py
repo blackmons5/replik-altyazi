@@ -141,6 +141,17 @@ with tempfile.TemporaryDirectory() as tmp:
     assert reference.correct("Lucia: " + damaged) == "Lucia: " + source
     assert reference.correct("Wait until the middie button lights up.") == "Wait until the middie button lights up."
     assert reference.correct("Go") == "Go"
+    forms = [damaged, source, source.upper()]
+    ocr_worker = subprocess.run(
+        [sys.executable, "-B", "-u", str(base.parent / "ocr/read.py"), "mobile", str(base.parent / "ocr/models")],
+        input=b"".join(b"line " + base64.b64encode(line.encode()) + b"\n"
+                       for line in forms + ["Go?", "Go!", "Lucia: " + damaged, "Bring my bag!"]),
+        stdout=subprocess.PIPE, check=True, timeout=90,
+        env={**os.environ, "LOCALAPPDATA": str(appdata)},
+    )
+    assert [json.loads(row) for row in ocr_worker.stdout.splitlines()] == [
+        source, source, source, "Go?", "Go!", "Lucia: " + source, "Bring my bag!",
+    ]
     assert reference.correct("Please do follow the yellow light.") == "Please do follow the yellow light."
     reference.connection.close()
     ocr_request = json.dumps(

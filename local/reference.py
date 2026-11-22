@@ -124,18 +124,24 @@ class EnglishReference:
         finally:
             connection.close()
 
-    def correct(self, text):
+    def correct(self, text, canonical=False):
         speaker = SPEAKER.fullmatch(text)
         body = speaker[2] if speaker else text
         key = normalized(body)
-        if not 24 <= len(key) <= 220 or len(key.split()) < 5:
+        allow_variant = 24 <= len(key) <= 220 and len(key.split()) >= 5
+        if not allow_variant and not canonical:
             return text
         if self.connection is None and not self.path.is_file():
             return text
         try:
             if self.connection is None:
                 self.connection = self._open()
-            if self.connection.execute("SELECT 1 FROM dialogue WHERE key = ?", (key,)).fetchone():
+            exact = self.connection.execute("SELECT text FROM dialogue WHERE key = ?", (key,)).fetchone()
+            if exact:
+                if canonical and (allow_variant or exact[0].casefold() == body.casefold()):
+                    return (speaker[1] if speaker else "") + exact[0]
+                return text
+            if not allow_variant:
                 return text
             variants = set()
             for word in WORDS.finditer(key):

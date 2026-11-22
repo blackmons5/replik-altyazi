@@ -125,12 +125,7 @@ namespace Replik {
                         string provider="none";
                         string sourceText=text;
                         try {
-                            var result=await worker.Read(text,local,linked.Token,useReference:gtaMode).ConfigureAwait(false);
-                            if(!string.IsNullOrEmpty(result.source)) {
-                                sourceText=result.source;
-                                reading(sourceText);
-                                DiagnosticsLog.Local.Write("ocr.reference_match");
-                            }
+                            var result=await worker.Read(text,local,linked.Token).ConfigureAwait(false);
                             translated=SubtitleText.CleanTranslation(sourceText,result.text);
                             if(local && translated.Length==0 && result.provider=="GTA 6 paketi") {
                                 result=await worker.Read(sourceText,true,linked.Token,false).ConfigureAwait(false);

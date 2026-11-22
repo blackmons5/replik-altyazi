@@ -10,6 +10,7 @@ namespace Replik {
     sealed class PaddleModel {
         const string Source="https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.10.0/onnx/PP-OCRv6/";
         static readonly HttpClient Http=new HttpClient {Timeout=TimeSpan.FromMinutes(5)};
+        static PaddleModel() {Http.DefaultRequestHeaders.UserAgent.ParseAdd("Replik-Windows/1");}
         internal static readonly PaddleModel[] Choices={
             new PaddleModel("PP-OCRv5_mobile",""),
             new PaddleModel("PP-OCRv6_small","small",

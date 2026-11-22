@@ -39,6 +39,8 @@ namespace Replik {
         readonly Label lastSource=new Label(), lastTranslation=new Label();
         readonly Label latency=new Label();
         readonly Button update=new Button();
+        readonly Button ocrButton=new Button();
+        OcrSettings ocrSettings=OcrSettings.Load();
         readonly System.Windows.Forms.Timer updateTimer=new System.Windows.Forms.Timer {Interval=6*60*60*1000};
         readonly CancellationTokenSource lifetime=new CancellationTokenSource();
         Updates.Offer offer;
@@ -81,7 +83,18 @@ namespace Replik {
             Put(latency,26,525,478,26);
             foreach(Control c in new Control[]{keyLabel,key,modelLabel,model,start,status,lastSource,lastTranslation,latency}) c.Top+=48;
             var diagnostics=new LinkLabel {Text="Tanı günlüğünü aç"};
-            Put(diagnostics,26,604,478,25);
+            Put(diagnostics,26,604,275,25);
+            Put(ocrButton,334,598,170,32);
+            ocrButton.Text="OCR ayarları";
+            ocrButton.Click+=delegate {
+                using(var dialog=new OcrSettingsDialog(ocrSettings)) {
+                    if(dialog.ShowDialog(this)!=DialogResult.OK) return;
+                    ocrSettings=dialog.Value;
+                    try {ocrSettings.Save();}
+                    catch(System.IO.IOException ex) {DiagnosticsLog.Local.Error("ocr.settings.save",ex); status.Text="OCR ayarları kaydedilemedi.";}
+                    catch(UnauthorizedAccessException ex) {DiagnosticsLog.Local.Error("ocr.settings.save",ex); status.Text="OCR ayarları kaydedilemedi.";}
+                }
+            };
             diagnostics.LinkClicked+=delegate {
                 DiagnosticsLog.Local.Write("diagnostics.open");
                 string path=DiagnosticsLog.Local.FilePath;
@@ -146,7 +159,7 @@ namespace Replik {
             bool local=engine.SelectedIndex==0;
             if (!local && (apiKey.Length==0 || !Regex.IsMatch(modelId,@"^gemini-[A-Za-z0-9.\-]+$"))) {status.Text="Gemini API anahtarını ve model adını gir."; return;}
             var source=new CancellationTokenSource(); running=source;
-            engine.Enabled=presets.Enabled=windows.Enabled=model.Enabled=key.Enabled=refresh.Enabled=false;
+            ocrButton.Enabled=engine.Enabled=presets.Enabled=windows.Enabled=model.Enabled=key.Enabled=refresh.Enabled=false;
             start.Text="Durdur"; status.Text="Altyazı bekleniyor…"; caption=""; positioning.Start();
             fraction=Desktop.Bands[presets.SelectedIndex];
             lastSource.Text="Okunan İngilizce: —"; lastTranslation.Text="Türkçe: —";
@@ -165,7 +178,7 @@ namespace Replik {
                 if(v.Item2>=0) apiTime=v.Item2+" ms";
                 latency.Text="Son ölçümler  •  Görüntü ve OCR: "+ocrTime+"  •  Çeviri: "+apiTime;
             });
-            var session=new Session(target,fraction,apiKey,modelId,local,line=>((IProgress<string>)reads).Report(line),
+            var session=new Session(target,fraction,apiKey,modelId,local,ocrSettings,line=>((IProgress<string>)reads).Report(line),
                 (ocr,api)=>metrics.Report(Tuple.Create(ocr,api)),(s,c)=>((IProgress<Tuple<string,string>>)progress).Report(Tuple.Create(s,c)));
             string result="Çeviri durduruldu.";
             try { await Task.Run(()=>session.Run(source.Token)); }
@@ -178,7 +191,7 @@ namespace Replik {
                 running=null; source.Dispose();
                 if (!closing) {
                     positioning.Stop(); overlay.Hide(); caption=""; status.Text=result;
-                    start.Enabled=engine.Enabled=presets.Enabled=windows.Enabled=refresh.Enabled=true;
+                    start.Enabled=ocrButton.Enabled=engine.Enabled=presets.Enabled=windows.Enabled=refresh.Enabled=true;
                     model.Enabled=key.Enabled=!local; start.Text="Çeviriyi başlat";
                 }
             }

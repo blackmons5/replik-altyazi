@@ -120,7 +120,40 @@ namespace Replik {
                 Check(localCalls==before,"A replaced cue never starts a local fallback");
             }
         }
+        static void OcrReadingModes() {
+            var window=new IntPtr(1);
+            var area=new Rectangle(0,0,800,130);
+            var one=new byte[]{1,1,0,0};
+            var two=new byte[]{0,1,1,1};
+            var gate=new OcrChangeGate(new OcrSettings());
+            Check(gate.ShouldRead(window,area,one,0),"The first visible frame always runs OCR");
+            gate.Record("Stay here.",.96f);
+            Check(!gate.ShouldRead(window,area,one,33),"Adaptive mode skips an unchanged subtitle image");
+            Check(gate.ShouldRead(window,area,two,66),"The default detects a change immediately");
+            gate.Record("We have to move.",.80f);
+            Check(gate.ShouldRead(window,area,two,99),"A low-confidence read gets another attempt without waiting");
+            gate.Record("We have to move.",.80f);
+            Check(!gate.ShouldRead(window,area,two,130),"A repeated OCR reading stops forcing extra passes");
+            Check(gate.ShouldRead(window,area,two,319),"Adaptive mode periodically rechecks apparently unchanged pixels");
+            Check(gate.ShouldRead(new IntPtr(2),area,two,330),"A different game window resets the image comparison");
+            var stable=new OcrChangeGate(new OcrSettings{StableFrames=1});
+            Check(stable.ShouldRead(window,area,one,0) && !stable.ShouldRead(window,area,two,33) &&
+                stable.ShouldRead(window,area,two,66),"Image stability is optional and waits for the configured count");
+            var exactText=new Dialogue((line,token)=>Task.FromResult(line),false);
+            exactText.Observe("Stay in the middle of the street.",.96f,0);
+            exactText.Tick(0);
+            exactText.Observe("Stay in the middie of the street.",.94f,60);
+            Check(exactText.Tick(60)=="Stay in the middie of the street.","Text variation merging can be disabled");
+            using(var reader=new Reader(useWindows:false,useFingerprint:false))
+            using(var sameImage=new Bitmap(600,76)) {
+                float confidence;
+                reader.Read(sameImage,out confidence,true);
+                reader.Read(sameImage,out confidence,true);
+                Check(reader.LastTesseractPasses>0,"Periodic mode runs OCR even on identical pixels");
+            }
+        }
         static void Main(string[] args) {
+            OcrReadingModes();
             GeminiRecovery();
             if(Array.IndexOf(args,"--windows-ocr")>=0) {
                 var windows=WindowsReader.OpenEnglish();

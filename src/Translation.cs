@@ -17,6 +17,7 @@ using Tesseract;
 namespace Replik {
     sealed class Reader : IDisposable {
         readonly int slowFrameMs;
+        readonly bool useFingerprint;
         readonly TesseractEngine engine;
         WindowsReader windows;
         long nextWindowsRead;
@@ -46,8 +47,9 @@ namespace Replik {
                     hash=unchecked((hash^(uint)image.GetPixel(x,y).ToArgb())*1099511628211UL);
             return hash;
         }
-        public Reader(int slowFrameMs=160,bool useWindows=true) {
+        public Reader(int slowFrameMs=160,bool useWindows=true,bool useFingerprint=true) {
             this.slowFrameMs=slowFrameMs;
+            this.useFingerprint=useFingerprint;
             engine=new TesseractEngine(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"tessdata"),"eng",EngineMode.LstmOnly);
             engine.SetVariable("user_defined_dpi","180");
             windows=useWindows?WindowsReader.OpenEnglish():null;
@@ -57,6 +59,7 @@ namespace Replik {
             return ReadPrimary(source,out confidence,gtaMode,false);
         }
         string ReadPrimary(Bitmap source,out float confidence,bool gtaMode,bool windowsAlreadyTried) {
+            if(!useFingerprint) return Recognize(source,gtaMode,out confidence,windowsAlreadyTried);
             var signature=Sample(source);
             if(signature==fingerprint && source.Size==lastSize && gtaMode==lastGtaMode && reused<2) {
                 reused++; confidence=lastConfidence; return lastText;
@@ -308,18 +311,23 @@ namespace Replik {
         readonly RectangleF fraction;
         readonly string key,model;
         readonly bool local;
+        readonly OcrSettings ocrSettings;
         readonly Action<string,string> report;
-        public Session(Target target,RectangleF fraction,string key,string model,bool local,Action<string> reading,Action<long,long> timings,Action<string,string> report) {
+        public Session(Target target,RectangleF fraction,string key,string model,bool local,OcrSettings ocrSettings,
+            Action<string> reading,Action<long,long> timings,Action<string,string> report) {
             this.local=local;
+            this.ocrSettings=ocrSettings;
             this.target=target; this.reading=reading; this.timings=timings; this.fraction=fraction; this.key=key; this.model=model; this.report=report;
         }
         public async Task Run(CancellationToken token) {
             bool gtaMode=fraction==Desktop.Bands[0];
-            DiagnosticsLog.Local.Write("session.start","provider={0} preset={1}",local?"opus-mt":"gemini",gtaMode?"bottom":fraction==Desktop.Bands[1]?"middle":"top");
-            using (var reader=new Reader())
+            DiagnosticsLog.Local.Write("session.start","provider={0} preset={1} ocr_adaptive={2} interval_ms={3}",
+                local?"opus-mt":"gemini",gtaMode?"bottom":fraction==Desktop.Bands[1]?"middle":"top",ocrSettings.Adaptive,ocrSettings.Interval);
+            using (var reader=new Reader(useFingerprint:false))
             using (var requests=CancellationTokenSource.CreateLinkedTokenSource(token))
             using (var worker=new LocalTranslator(requests.Token)) {
                 var clock=System.Diagnostics.Stopwatch.StartNew();
+                var gate=ocrSettings.Adaptive?new OcrChangeGate(ocrSettings):null;
                 var fallback=new GeminiFallback((text,ct)=>Gemini.Translate(key,model,text,ct),
                     async (text,ct)=>(await worker.Read(text,true,ct,false).ConfigureAwait(false)).text);
                 var dialogue=new Dialogue(async (text,cueToken)=>{
@@ -355,11 +363,11 @@ namespace Replik {
                         timings(-1,clock.ElapsedMilliseconds-began);
                         return translated;
                     }
-                });
+                },ocrSettings.MergeTextVariations);
                 long nextMeasure=0;
                 IntPtr current=IntPtr.Zero;
                 bool first=true;
-                var frame=ReadFrame(reader,0,requests.Token);
+                var frame=ReadFrame(reader,gate,clock,0,requests.Token);
                 try {
                     while(true) {
                         token.ThrowIfCancellationRequested();
@@ -373,7 +381,7 @@ namespace Replik {
                                 report(active?"Oyun görüntüsü okunuyor. Altyazı bekleniyor…":"Oyuna dön. Veyra tanınmazsa listeden oyun görüntüsünün penceresini seç.","");
                                 first=false; current=visible;
                             }
-                            if(active) {
+                            if(active && sample.Read) {
                                 if(clock.ElapsedMilliseconds>=nextMeasure) {
                                     timings(sample.Millis,-1);
                                     DiagnosticsLog.Local.Write("ocr.sample","has_text={0} confidence={1:F2} elapsed_ms={2} tesseract_passes={3} windows_passes={4} crop={5}x{6}",
@@ -384,7 +392,7 @@ namespace Replik {
                                 dialogue.Observe(sample.Text,sample.Confidence,clock.ElapsedMilliseconds,gtaMode);
                             }
                             // Pace only the next screen sample. Completed translations wake this loop independently.
-                            frame=ReadFrame(reader,active?(int)Math.Max(0,33-sample.Millis):130,requests.Token);
+                            frame=ReadFrame(reader,gate,clock,active?(int)Math.Max(0,ocrSettings.Interval-sample.Millis):130,requests.Token);
                         }
                         if(current!=IntPtr.Zero && target.ActiveWindow()==current) {
                             var caption=dialogue.Tick(clock.ElapsedMilliseconds);
@@ -405,6 +413,7 @@ namespace Replik {
             }
         }
         sealed class Sample {
+            internal bool Read;
             internal IntPtr Window;
             internal long Millis;
             internal string Text;
@@ -412,13 +421,16 @@ namespace Replik {
             internal int TesseractPasses,WindowsPasses;
             internal Size CropSize;
         }
-        async Task<Sample> ReadFrame(Reader reader,int delay,CancellationToken token) {
+        async Task<Sample> ReadFrame(Reader reader,OcrChangeGate gate,Stopwatch clock,int delay,CancellationToken token) {
             if(delay>0) await Task.Delay(delay,token).ConfigureAwait(false);
             return await Task.Run(()=>{
                 token.ThrowIfCancellationRequested();
                 var sample=new Sample();
                 var window=target.ActiveWindow();
-                if(window==IntPtr.Zero) return sample;
+                if(window==IntPtr.Zero) {
+                    if(gate!=null) gate.Reset();
+                    return sample;
+                }
                 var bounds=Desktop.Bounds(window);
                 bool gtaMode=fraction==Desktop.Bands[0];
                 var tight=Desktop.Pixels(bounds,fraction);
@@ -428,11 +440,18 @@ namespace Replik {
                 var elapsed=System.Diagnostics.Stopwatch.StartNew();
                 using(var image=Desktop.Capture(area)) {
                     if(Desktop.GetForegroundWindow()!=window) return sample;
+                    sample.Window=window;
+                    if(gate!=null && !gate.ShouldRead(window,area,OcrChangeGate.Mark(image),clock.ElapsedMilliseconds)) {
+                        sample.Millis=elapsed.ElapsedMilliseconds;
+                        return sample;
+                    }
                     if(gtaMode && area!=tight && area.Contains(tight)) {
                         tight.Offset(-area.X,-area.Y);
                         sample.Text=reader.ReadGta(image,tight,out sample.Confidence);
                     } else sample.Text=reader.Read(image,out sample.Confidence,gtaMode);
+                    if(gate!=null) gate.Record(sample.Text,sample.Confidence);
                 }
+                sample.Read=true;
                 sample.TesseractPasses=reader.LastTesseractPasses;
                 sample.WindowsPasses=reader.LastWindowsPasses;
                 sample.CropSize=area.Size;

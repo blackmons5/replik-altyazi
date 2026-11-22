@@ -1,3 +1,5 @@
+**OCR ayarları** menüsünde periyodik okuma veya görüntü değişimine göre okuma seçilebilir. Görüntü değişimine göre mod, altyazı bölgesindeki açık renkli harf kenarlarına bakar. Varsayılan ayarda yeni görüntü için sabit kare beklenmez. Benzer görünen görüntüler 220 ms dolduğunda yeniden okunur. Örnekleme aralığı, görüntü benzerliği, sabit kare bekleme ve küçük metin farklarının birleştirilmesi ayarlanabilir.
+
 Replik önce GTA 6 topluluk paketini arar. Tam eşleşme bulunmazsa uzun repliklerde tek bir yaygın OCR harf hatası, eşleşme benzersiz olduğunda düzeltilebilir. Hazır çeviri yoksa varsayılan OPUS-MT veya seçili Gemini çalışır. Yerel modda birden çok cümleli replikte yalnızca bir cümle eksikse, model o cümleyi çevirir.
 
 Tam kurulum ve küçük güncelleme, GTA 6 paketini oynanan bilgisayara indirir veya mevcut kopyayı doğrular. Bir indirme adresine ulaşılamadığında ikinci resmî adres denenir. Paket kurulduktan sonra çevrimdışı kullanılabilir.

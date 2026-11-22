@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using System.Text.RegularExpressions;
 
 namespace Replik {
@@ -14,7 +13,6 @@ namespace Replik {
         static readonly Regex StraySymbols=new Regex(@"(?<!\S)(?:[?]{2,}|[=|<>@#]{2,})(?!\S)");
         static readonly Regex SymbolNoise=new Regex(@"[=|<>@#{}\\^~_]");
         static readonly Regex Word=new Regex(@"[\p{L}\p{N}]+");
-        static readonly Regex Diacritics=new Regex(@"\p{Mn}");
         static readonly Regex Significant=new Regex(@"\b(?:\w*\d+\w*|no|not|never|none|without|cannot|cant|dont|doesnt|didnt|isnt|arent|wasnt|werent|wont|wouldnt|shouldnt|couldnt)\b");
         static readonly HashSet<string> Prompts=new HashSet<string>(StringComparer.OrdinalIgnoreCase) {
             "PHOTO","PHOTOS","FOTO","PHOTO MODE","PHOTO STUDIO","TAKE PHOTO","CAMERA ROLL","VIEW PHOTO","SELECT","EXAMINE","INSPECT",
@@ -77,12 +75,6 @@ namespace Replik {
         static string Normalize(string text) {
             var plain=text.ToLowerInvariant().Replace("'","").Replace("’","");
             return string.Join(" ",Word.Matches(plain).Cast<Match>().Select(m=>m.Value));
-        }
-        internal static bool MatchesOverlay(string detected,string rendered) {
-            string a=Normalize(Diacritics.Replace(detected.Normalize(NormalizationForm.FormD),""));
-            string b=Normalize(Diacritics.Replace(rendered.Normalize(NormalizationForm.FormD),""));
-            return a.Length>=3 && ((" "+b+" ").Contains(" "+a+" ") ||
-                a.Length>=12 && EditDistanceBelow(a,b,3));
         }
 
         internal static string RemoveRepeatedRows(string text) {

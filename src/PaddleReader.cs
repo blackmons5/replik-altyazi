@@ -25,7 +25,7 @@ namespace Replik {
         }
 
         sealed class Row {
-            internal Rectangle Bounds,Ink;
+            internal Rectangle Bounds;
             internal string Text;
             internal float Confidence;
         }
@@ -82,13 +82,7 @@ namespace Replik {
         }
 
         internal string Read(Bitmap source,out float confidence,bool gtaMode=false) {
-            Rectangle subtitle;
-            float lineHeight;
-            return Read(source,out confidence,gtaMode,out subtitle,out lineHeight,null);
-        }
-        internal string Read(Bitmap source,out float confidence,bool gtaMode,out Rectangle subtitle,out float lineHeight,CaptionSnapshot overlay) {
             confidence=0;
-            subtitle=Rectangle.Empty; lineHeight=0;
             var detected=Detect(source);
             if(detected.Length==0) return "";
             SubtitleImage shape=gtaMode?new SubtitleImage(source):null;
@@ -100,46 +94,25 @@ namespace Replik {
                 var p=line.points;
                 var bounds=Rectangle.FromLTRB((int)Math.Floor(Math.Min(p[0],p[6])),(int)Math.Floor(Math.Min(p[1],p[3])),
                     (int)Math.Ceiling(Math.Max(p[2],p[4])),(int)Math.Ceiling(Math.Max(p[5],p[7])));
-                if(overlay!=null) {
-                    var overlap=Rectangle.Intersect(bounds,overlay.Bounds);
-                    if(overlap.Width*overlap.Height>=bounds.Width*bounds.Height*.60 &&
-                        SubtitleText.MatchesOverlay(text,overlay.Text)) continue;
-                }
-                var ink=bounds;
                 if(shape!=null && (SubtitleText.IsWorldLabel(text) || Math.Abs(p[3]-p[1])>Math.Max(2,bounds.Width*.035) ||
-                    !HasSubtitleShape(shape,bounds,source.Size,out ink))) continue;
-                found.Add(new Row {Bounds=bounds,Ink=ink,Text=text,Confidence=line.confidence});
+                    !HasSubtitleShape(shape,bounds,source.Size))) continue;
+                found.Add(new Row {Bounds=bounds,Text=text,Confidence=line.confidence});
             }
             if(found.Count==0) return "";
             var rows=gtaMode?SubtitleRows(found,source.Height):found.OrderBy(r=>r.Bounds.Top).ThenBy(r=>r.Bounds.Left).ToArray();
             var joined=string.Join(" ",rows.Select(r=>r.Text));
             if(joined.Length>550) return "";
             confidence=rows.Average(r=>r.Confidence);
-            subtitle=rows.Select(r=>r.Ink).Aggregate(Rectangle.Union);
-            lineHeight=(float)rows.Average(r=>r.Ink.Height);
-            if(!gtaMode) return joined;
-            // Resolve the full selected subtitle before the dialogue tracker sees it.
-            var request=Encoding.ASCII.GetBytes("line "+Convert.ToBase64String(Encoding.UTF8.GetBytes(joined))+"\n");
-            var reply=Exchange(request).GetAwaiter().GetResult();
-            token.ThrowIfCancellationRequested();
-            if(reply==null) throw new IOException("PaddleOCR bağlantısı kesildi.");
-            var matched=json.Deserialize<string>(reply);
-            if(matched!=joined) DiagnosticsLog.Local.Write("ocr.reference_match");
-            return matched;
+            return joined;
         }
 
-        static bool HasSubtitleShape(SubtitleImage image,Rectangle box,Size source,out Rectangle ink) {
-            ink=Rectangle.Empty;
+        static bool HasSubtitleShape(SubtitleImage image,Rectangle box,Size source) {
             double centerX=(box.Left+box.Width*.5)/source.Width;
             double centerY=(box.Top+box.Height*.5)/source.Height;
             if(centerX<.36 || centerX>.64 || centerY<.10 || centerY>.90) return false;
-            Rectangle glyphs;
-            if(!image.HasSubtitleStrokes(Rectangle.FromLTRB(
+            return image.HasSubtitleStrokes(Rectangle.FromLTRB(
                 box.Left*image.Size.Width/source.Width,box.Top*image.Size.Height/source.Height,
-                box.Right*image.Size.Width/source.Width,box.Bottom*image.Size.Height/source.Height),out glyphs)) return false;
-            ink=Rectangle.FromLTRB(box.Left,(int)Math.Round(glyphs.Top*source.Height/(double)image.Size.Height),
-                box.Right,(int)Math.Ceiling(glyphs.Bottom*source.Height/(double)image.Size.Height));
-            return true;
+                box.Right*image.Size.Width/source.Width,box.Bottom*image.Size.Height/source.Height));
         }
 
         static Row[] SubtitleRows(List<Row> rows,int height) {

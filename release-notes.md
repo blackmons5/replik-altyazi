@@ -1,5 +1,3 @@
-## AccelSubs 1.0.34
+## AccelSubs 1.0.35
 
-- GTA alt altyazı bölgesinde İngilizce replik eşleştirmesi çeviriden önce yapılır. Aynı repliğe eşleşen OCR okumaları tek çeviriyi paylaşır.
-- Kısa ve belirsiz okumalar olduğu gibi işlenir. Referans paketi hazırlanırken de çeviri devam eder.
-- 1.0.33 kuruluysa küçük güncellemeyi kullanabilirsin.
+1.0.31 sürümünün OCR, çeviri ve altyazı gösterimi geri getirildi. 1.0.34 kuruluysa küçük güncellemeyi kullanabilirsin. Güncelleyicinin geri dönüşü algılaması için paket sürümü 1.0.35 olarak sunulur.

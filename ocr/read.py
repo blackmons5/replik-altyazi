@@ -5,8 +5,6 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT / "packages"))
-sys.path.insert(0, str(ROOT.parent / "local"))
-from reference import EnglishReference, folder
 
 import cv2
 import numpy as np
@@ -36,12 +34,7 @@ def main(variant, model_folder):
         "EngineConfig.onnxruntime.intra_op_num_threads": 2,
         "EngineConfig.onnxruntime.inter_op_num_threads": 1,
     })
-    reference = EnglishReference(folder())
     for request in sys.stdin.buffer:
-        if request.startswith(b"line "):
-            raw = base64.b64decode(request[5:]).decode("utf-8")
-            print(json.dumps(reference.correct(raw, canonical=True), ensure_ascii=True), flush=True)
-            continue
         data = np.frombuffer(base64.b64decode(request), dtype=np.uint8)
         img = cv2.imdecode(data, cv2.IMREAD_COLOR)
         result = engine(img, use_cls=False)

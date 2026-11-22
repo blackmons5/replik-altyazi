@@ -257,8 +257,8 @@ namespace Replik {
             late.Tick(0);
             late.Observe("",0,100,true);
             lateReply.SetResult("Bekle!");
-            Check(late.Tick(990)=="Bekle!" && late.Tick(1839)==null && late.Tick(1840)=="",
-                "A late reply remains readable for 850 ms through a real OCR gap");
+            Check(late.Tick(710)=="Bekle!" && late.Tick(959)==null && late.Tick(960)=="",
+                "A late reply gets a readable interval without surviving a long gap");
             var shortCue=new Dialogue(s=>Task.FromResult(s=="Wait"?"Bekle!":"Burada kal."));
             shortCue.Observe("Stay right here.",.96f,0,true);
             Check(shortCue.Tick(0)=="Burada kal.","Show preceding subtitle");
@@ -301,19 +301,20 @@ namespace Replik {
             returns.Observe("Stay right here.",.96f,0);
             Check(returns.Tick(0)=="Burada kal.","First reading appears");
             returns.Observe("",0,300);
-            Check(returns.Tick(1000)==null,"A 700 ms OCR gap keeps the existing Turkish caption");
-            returns.Observe("Stay right here.",.96f,1050);
-            Check(returns.Tick(1050)==null && calls==1,"Returning English does not redraw or retranslate");
-            returns.Observe("Roak",.88f,1070,true);
-            Check(returns.Tick(1070)==null && calls==1,"A single ambiguous fragment cannot replace visible dialogue");
-            returns.Observe("",0,1100);
-            Check(returns.Tick(2269)==null && returns.Tick(2270)=="","Clear after a sustained 1.2 second OCR gap");
-            returns.Observe("Stay right here!",.97f,2450);
-            Check(returns.Tick(2450)=="Burada kal." && calls==1,"Restore the matching cached translation after an OCR dropout");
-            returns.Observe("",0,2600);
-            Check(returns.Tick(3799)==null && returns.Tick(3800)=="","Clear after the visible-caption grace period");
-            returns.Observe("Stay right here.",.96f,4800);
-            Check(returns.Tick(4800)=="Burada kal." && calls==1,"Genuine repeat after a longer break can use the cache");
+            Check(returns.Tick(599)==null,"A 299 ms OCR gap keeps the existing Turkish caption");
+            returns.Observe("Stay right here.",.96f,650);
+            Check(returns.Tick(650)==null && calls==1,"Returning English does not redraw or retranslate");
+            returns.Observe("Roak",.88f,670,true);
+            Check(returns.Tick(670)==null && calls==1,"A single ambiguous fragment cannot replace visible dialogue");
+            returns.Observe("",0,700);
+            returns.Observe("",0,1200);
+            Check(returns.Tick(1200)=="","A missing caption can clear normally");
+            returns.Observe("Stay right here!",.97f,1450);
+            Check(returns.Tick(1450)=="Burada kal." && calls==1,"Restore the matching cached translation after an OCR dropout");
+            returns.Observe("",0,1600);
+            Check(returns.Tick(1810)==null && returns.Tick(2100)=="","Clear after the visible-caption grace period");
+            returns.Observe("Stay right here.",.96f,3600);
+            Check(returns.Tick(3600)=="Burada kal." && calls==1,"Genuine repeat after a longer break can use the cache");
             var switchCue=new Dialogue(s=>Task.FromResult(s=="Stay here."?"Burada kal.":"Koş!"));
             switchCue.Observe("Stay here.",.96f,0,true);
             Check(switchCue.Tick(0)=="Burada kal.","First caption visible");
@@ -324,9 +325,9 @@ namespace Replik {
             changing.Observe("Stay here.",.96f,0,true);
             Check(changing.Tick(0)=="Burada kal.","Original subtitle is on screen");
             changing.Observe("We just need to wait for the right time,",.80f,100,true);
-            Check(changing.Tick(100)==null,"One unconfirmed replacement cannot hide a displayed caption");
+            Check(changing.Tick(100)=="","A plausible new line immediately hides the outdated translation");
             changing.Observe("",0,250,true);
-            Check(changing.Tick(250)==null,"An intervening OCR miss retains the displayed caption");
+            Check(changing.Tick(250)==null,"An intervening OCR miss cannot restore the outdated translation");
             changing.Observe("We just need to wait for the right time,",.81f,515,true);
             Check(changing.Tick(515)=="Doğru zamanı beklemeliyiz,","A second matching OCR read still confirms after a slow frame");
             var seen=new List<string>();
@@ -380,11 +381,11 @@ namespace Replik {
             jobs["Now!"].SetResult("Hemen!");
             Check(d.Tick(250)==null && !d.NextEvent(blockedFrame.Task).IsCompleted,"Never display a late answer from a canceled cue");
             d.Observe("",0,300);
-            Check(d.Tick(1499)==null && d.Tick(1500)=="","Brief gaps do not flicker, sustained absence clears the caption");
-            d.Observe("Drive!",.94f,1550);
-            Check(d.Tick(1550)=="Sür!" && jobs.Count==2,"Reuse a matching known translation");
+            Check(d.Tick(799)==null && d.Tick(800)=="","Brief gaps do not flicker, sustained absence clears the caption");
+            d.Observe("Drive!",.94f,850);
+            Check(d.Tick(850)=="Sür!" && jobs.Count==2,"Reuse a matching known translation");
             d.Pause();
-            Check(d.Tick(1560)==null,"Pause clears display");
+            Check(d.Tick(860)==null,"Pause clears display");
             d.Finish();
             var source=new Rectangle(0,0,1920,1080);
             Check(Desktop.Bands.Length==3 && Desktop.Bands[0].Top>Desktop.Bands[1].Top && Desktop.Bands[1].Top>Desktop.Bands[2].Top,"Three ordered preset bands");
@@ -392,11 +393,6 @@ namespace Replik {
             Check(Target.PlayerName("Veyra") && Target.PlayerName("NRVideo") && Target.PlayerName("RemotePlay") && !Target.PlayerName("chrome"),"Automatic player matching");
             var region=Desktop.Pixels(new Rectangle(-1920,0,1920,1080),new RectangleF(80f/1920,710f/1080,620f/1920,90f/1080));
             Check(region==new Rectangle(-1840,710,620,90),"Second monitor crop");
-            var anchorBox=new Rectangle(-1750,780,270,16);
-            Check(Caption.SameAnchor(anchorBox,16,new Rectangle(-1752,783,276,18),18),
-                "Discard small OCR movement and size changes on a displayed caption");
-            Check(!Caption.SameAnchor(anchorBox,16,new Rectangle(-1750,798,270,16),16),
-                "A substantial change still moves the caption");
             using(var shortLine=Caption.Render("Gel!",source.Size))
             using(var longer=Caption.Render("Lucia: Arabaya bin ve kapıyı kapat.",source.Size)) {
                 Check(shortLine.Width<longer.Width && shortLine.GetPixel(0,0).A<20,"Rounded content-width card");

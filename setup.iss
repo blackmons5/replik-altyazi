@@ -36,25 +36,24 @@ Name: "turkish"; MessagesFile: "compiler:Languages\Turkish.isl"
 
 [Files]
 Source: "build\app\Replik.exe"; DestDir: "{app}"; Flags: ignoreversion
-#ifdef Patch
-Source: "build\app\local\translate.py"; DestDir: "{app}\local"; Flags: ignoreversion
-Source: "build\app\local\reference.py"; DestDir: "{app}\local"; Flags: ignoreversion
-#endif
 #ifndef CachePatchFrom
 Source: "build\app\THIRD-PARTY.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "build\app\Apache-2.0.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "build\app\ocr\*"; DestDir: "{app}\ocr"; Flags: recursesubdirs ignoreversion
 #ifdef Patch
+Source: "build\app\local\translate.py"; DestDir: "{app}\local"; Flags: ignoreversion
 Source: "build\app\local\runtime-id.txt"; DestDir: "{app}\local"; Flags: ignoreversion
 #else
 Source: "build\app\local\*"; DestDir: "{app}\local"; Flags: recursesubdirs ignoreversion
 Source: "build\inputs\VC_redist.x64.exe"; DestDir: "{tmp}"; Flags: dontcopy
 #endif
 #else
+Source: "build\app\local\translate.py"; DestDir: "{app}\local"; Flags: ignoreversion
 Source: "build\app\ocr\read.py"; DestDir: "{app}\ocr"; Flags: ignoreversion
 #endif
 
 [InstallDelete]
+Type: files; Name: "{app}\local\reference.py"
 Type: files; Name: "{commonprograms}\Replik\Replik.lnk"
 Type: dirifempty; Name: "{commonprograms}\Replik"
 Type: files; Name: "{app}\Tesseract.dll"
@@ -84,13 +83,6 @@ begin
         SW_HIDE, ewNoWait, Code) then Log('Update cache cleanup could not start: ' + SysErrorMessage(Code));
     except
       Log('Update cache cleanup could not start: ' + GetExceptionMessage);
-    end;
-    try
-      if not ExecAsOriginalUser(ExpandConstant('{app}\local\python.exe'),
-        '-B reference.py', ExpandConstant('{app}\local'), SW_HIDE, ewNoWait, Code) then
-        Log('English reference preparation could not start: ' + SysErrorMessage(Code));
-    except
-      Log('English reference preparation could not start: ' + GetExceptionMessage);
     end;
   end;
 end;

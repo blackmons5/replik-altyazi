@@ -13,9 +13,6 @@ from time import perf_counter
 from types import SimpleNamespace
 
 base = Path(sys.argv[1]).resolve()
-sys.path.insert(0, str(base))
-from reference import EnglishReference
-
 spec = importlib.util.spec_from_file_location("translate", base / "translate.py")
 engine = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(engine)
@@ -123,52 +120,3 @@ with tempfile.TemporaryDirectory() as tmp:
         reply = json.loads(replies)
         assert worker.returncode == 0 and reply["provider"] == "GTA 6 paketi" and reply["text"] == entries[engine.key(source)], replies
     print("Ready pack, bounded OCR corrections, ambiguity and local fallback verified.")
-
-    reference = EnglishReference(appdata / "Replik" / "english-reference")
-    reference.directory.mkdir(parents=True, exist_ok=True)
-    tsv = folder / "source.tsv"
-    tsv.write_text(
-        "category\ten\n"
-        "dialogue\tKeep to the middle of the road.\n"
-        "subtitle\tPlease don't follow the yellow light.\n"
-        "ui\tWait until the middle button lights up.\n"
-        "dialogue\tGo!\n", encoding="utf-8"
-    )
-    reference.build(tsv, reference.path)
-    damaged = "Keep to the middie of the road."
-    assert reference.ready() and reference.prepare()
-    assert reference.correct(damaged) == source
-    assert reference.correct("Lucia: " + damaged) == "Lucia: " + source
-    assert reference.correct("Wait until the middie button lights up.") == "Wait until the middie button lights up."
-    assert reference.correct("Go") == "Go"
-    forms = [damaged, source, source.upper()]
-    ocr_worker = subprocess.run(
-        [sys.executable, "-B", "-u", str(base.parent / "ocr/read.py"), "mobile", str(base.parent / "ocr/models")],
-        input=b"".join(b"line " + base64.b64encode(line.encode()) + b"\n"
-                       for line in forms + ["Go?", "Go!", "Lucia: " + damaged, "Bring my bag!"]),
-        stdout=subprocess.PIPE, check=True, timeout=90,
-        env={**os.environ, "LOCALAPPDATA": str(appdata)},
-    )
-    assert [json.loads(row) for row in ocr_worker.stdout.splitlines()] == [
-        source, source, source, "Go?", "Go!", "Lucia: " + source, "Bring my bag!",
-    ]
-    assert reference.correct("Please do follow the yellow light.") == "Please do follow the yellow light."
-    reference.connection.close()
-    ocr_request = json.dumps(
-        {"line": base64.b64encode(damaged.encode()).decode(), "local": True, "reference": True}
-    ) + "\n"
-    with subprocess.Popen([sys.executable, "-B", "-u", str(base / "translate.py"), "--warm-model"],
-                          stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                          env={**os.environ, "LOCALAPPDATA": str(appdata)}) as worker:
-        replies, _ = worker.communicate(ocr_request.encode(), timeout=90)
-        reply = json.loads(replies)
-        assert worker.returncode == 0 and reply["source"] == source and reply["text"] == entries[engine.key(source)], replies
-    print("English reference corrected an OCR glyph, preserved speaker, and reached the translation worker.")
-
-    live_reference = EnglishReference(folder / "real-english-reference")
-    assert live_reference.prepare(), "Published English reference download or index creation failed"
-    with live_reference._open() as connection:
-        count = connection.execute("SELECT count(*) FROM dialogue").fetchone()[0]
-    connection.close()
-    assert count > 100000, count
-    print("Verified English dialogue reference. Distinct entries:", count)

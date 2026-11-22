@@ -96,14 +96,12 @@ namespace Replik {
         readonly string key,model;
         readonly bool local;
         readonly OcrSettings ocrSettings;
-        readonly Action<string,string,SubtitleAnchor> report;
-        readonly Func<CaptionSnapshot> renderedCaption;
+        readonly Action<string,string> report;
         public Session(Target target,RectangleF fraction,string key,string model,bool local,OcrSettings ocrSettings,
-            Action<string> reading,Action<long,long> timings,Action<string,string,SubtitleAnchor> report,Func<CaptionSnapshot> renderedCaption) {
+            Action<string> reading,Action<long,long> timings,Action<string,string> report) {
             this.local=local;
             this.ocrSettings=ocrSettings;
             this.target=target; this.reading=reading; this.timings=timings; this.fraction=fraction; this.key=key; this.model=model; this.report=report;
-            this.renderedCaption=renderedCaption;
         }
         public async Task Run(CancellationToken token) {
             bool gtaMode=fraction==Desktop.Bands[0];
@@ -111,7 +109,7 @@ namespace Replik {
                 local?"opus-mt":"gemini",gtaMode?"bottom":fraction==Desktop.Bands[1]?"middle":"top",OcrSettings.SampleInterval);
             using (var requests=CancellationTokenSource.CreateLinkedTokenSource(token))
             using (var reader=new Reader(requests.Token,PaddleModel.Find(ocrSettings.Model)))
-            using (var worker=new LocalTranslator(requests.Token,gtaMode)) {
+            using (var worker=new LocalTranslator(requests.Token)) {
                 var clock=System.Diagnostics.Stopwatch.StartNew();
                 var gate=new OcrChangeGate(ocrSettings);
                 var fallback=new GeminiFallback((text,ct)=>Gemini.Translate(key,model,text,ct),
@@ -123,13 +121,12 @@ namespace Replik {
                     using(var linked=CancellationTokenSource.CreateLinkedTokenSource(requests.Token,cueToken)) {
                         string translated="";
                         string provider="none";
-                        string sourceText=text;
                         try {
                             var result=await worker.Read(text,local,linked.Token).ConfigureAwait(false);
-                            translated=SubtitleText.CleanTranslation(sourceText,result.text);
+                            translated=SubtitleText.CleanTranslation(text,result.text);
                             if(local && translated.Length==0 && result.provider=="GTA 6 paketi") {
-                                result=await worker.Read(sourceText,true,linked.Token,false).ConfigureAwait(false);
-                                translated=SubtitleText.CleanTranslation(sourceText,result.text);
+                                result=await worker.Read(text,true,linked.Token,false).ConfigureAwait(false);
+                                translated=SubtitleText.CleanTranslation(text,result.text);
                             }
                             if(translated.Length>0) provider=result.provider;
                         } catch(IOException) {
@@ -139,21 +136,20 @@ namespace Replik {
                         }
                         if(!local && string.IsNullOrEmpty(translated)) {
                             linked.Token.ThrowIfCancellationRequested();
-                            report("Gemini çeviriyor…",null,default(SubtitleAnchor));
-                            translated=await fallback.Translate(sourceText,linked.Token).ConfigureAwait(false);
+                            report("Gemini çeviriyor…",null);
+                            translated=await fallback.Translate(text,linked.Token).ConfigureAwait(false);
                             provider="gemini-or-opus-mt";
                         }
                         linked.Token.ThrowIfCancellationRequested();
-                        translated=SubtitleText.CleanTranslation(sourceText,translated);
+                        translated=SubtitleText.CleanTranslation(text,translated);
                         DiagnosticsLog.Local.Write("translation.result","has_output={0} elapsed_ms={1} provider={2}",translated.Length>0,clock.ElapsedMilliseconds-began,provider);
-                        if(translated.Length==0) report("Bu replik için geçerli Türkçe çeviri alınamadı.",null,default(SubtitleAnchor));
+                        if(translated.Length==0) report("Bu replik için geçerli Türkçe çeviri alınamadı.",null);
                         timings(-1,clock.ElapsedMilliseconds-began);
                         return translated;
                     }
                 },ocrSettings.TextDifference);
                 long nextMeasure=0;
                 IntPtr current=IntPtr.Zero;
-                SubtitleAnchor previousAnchor=default(SubtitleAnchor);
                 bool first=true;
                 var frame=ReadFrame(reader,gate,clock,0,requests.Token);
                 try {
@@ -166,8 +162,7 @@ namespace Replik {
                             if(first || current!=visible) {
                                 dialogue.Pause();
                                 DiagnosticsLog.Local.Write("capture.state","active={0}",active);
-                                previousAnchor=default(SubtitleAnchor);
-                                report(active?"Oyun görüntüsü okunuyor. Altyazı bekleniyor…":"Oyuna dön. Veyra tanınmazsa listeden oyun görüntüsünün penceresini seç.","",previousAnchor);
+                                report(active?"Oyun görüntüsü okunuyor. Altyazı bekleniyor…":"Oyuna dön. Veyra tanınmazsa listeden oyun görüntüsünün penceresini seç.","");
                                 first=false; current=visible;
                             }
                             if(active && sample.Read) {
@@ -178,21 +173,17 @@ namespace Replik {
                                         sample.CropSize.Width,sample.CropSize.Height);
                                     nextMeasure=clock.ElapsedMilliseconds+1000;
                                 }
-                                dialogue.Observe(sample.Text,sample.Confidence,clock.ElapsedMilliseconds,gtaMode,sample.Anchor);
+                                dialogue.Observe(sample.Text,sample.Confidence,clock.ElapsedMilliseconds,gtaMode);
                             }
                             // Pace only the next screen sample. Completed translations wake this loop independently.
                             frame=ReadFrame(reader,gate,clock,active?(int)Math.Max(0,OcrSettings.SampleInterval-sample.Millis):130,requests.Token);
                         }
                         if(current!=IntPtr.Zero && target.ActiveWindow()==current) {
                             var caption=dialogue.Tick(clock.ElapsedMilliseconds);
-                            var anchor=dialogue.VisibleAnchor;
                             if(caption!=null) {
                                 DiagnosticsLog.Local.Write("caption.state","visible={0}",caption.Length>0);
-                                report(caption.Length>0?"Çeviri etkin":"Altyazı bekleniyor…",caption,anchor);
-                            } else if(!anchor.Equals(previousAnchor)) {
-                                report(null,null,anchor);
+                                report(caption.Length>0?"Çeviri etkin":"Altyazı bekleniyor…",caption);
                             }
-                            previousAnchor=anchor;
                             await dialogue.NextEvent(frame).ConfigureAwait(false);
                         } else {
                             await frame.ConfigureAwait(false);
@@ -212,7 +203,6 @@ namespace Replik {
             internal string Text;
             internal float Confidence;
             internal Size CropSize;
-            internal SubtitleAnchor Anchor;
         }
         async Task<Sample> ReadFrame(Reader reader,OcrChangeGate gate,Stopwatch clock,int delay,CancellationToken token) {
             if(delay>0) await Task.Delay(delay,token).ConfigureAwait(false);
@@ -231,13 +221,6 @@ namespace Replik {
                 if(gtaMode && !SystemInformationVisible(area)) area=tight;
                 if(area.Width<60 || area.Height<12 || !SystemInformationVisible(area)) return sample;
                 var elapsed=System.Diagnostics.Stopwatch.StartNew();
-                var rendered=renderedCaption();
-                CaptionSnapshot overlay=null;
-                if(rendered!=null && area.IntersectsWith(rendered.Bounds)) {
-                    var localBounds=rendered.Bounds;
-                    localBounds.Offset(-area.Left,-area.Top);
-                    overlay=new CaptionSnapshot(localBounds,rendered.Text);
-                }
                 using(var image=Desktop.Capture(area)) {
                     if(Desktop.GetForegroundWindow()!=window) return sample;
                     sample.Window=window;
@@ -245,13 +228,7 @@ namespace Replik {
                         sample.Millis=elapsed.ElapsedMilliseconds;
                         return sample;
                     }
-                    Rectangle subtitle;
-                    float lineHeight;
-                    sample.Text=reader.Read(image,out sample.Confidence,gtaMode,out subtitle,out lineHeight,overlay);
-                    if(!subtitle.IsEmpty) {
-                        subtitle.Offset(area.Location);
-                        sample.Anchor=new SubtitleAnchor(window,bounds,subtitle,lineHeight);
-                    }
+                    sample.Text=reader.Read(image,out sample.Confidence,gtaMode);
                     gate.Record(sample.Text,sample.Confidence);
                 }
                 sample.Read=true;

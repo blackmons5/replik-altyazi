@@ -12,7 +12,6 @@ import threading
 import time
 import unicodedata
 from urllib.request import Request, urlopen
-from reference import EnglishReference, folder as reference_folder
 
 CATALOG = "https://couchsubs-packs.enmeraapps.com/v1/packs"
 MIRROR = "https://couchsubs-packs.enmera.workers.dev/v1/packs"
@@ -214,9 +213,8 @@ class Opus:
         return result
 
 
-def serve(warm_model=False, prepare_reference=False):
+def serve(warm_model=False):
     pack = GamePack(Path(os.environ["LOCALAPPDATA"]) / "Replik" / "packs")
-    reference = EnglishReference(reference_folder())
     model = None
     model_lock = threading.Lock()
 
@@ -238,8 +236,6 @@ def serve(warm_model=False, prepare_reference=False):
         threading.Thread(target=warm).start()
     cached = pack.restore()
     threading.Thread(target=pack.refresh, args=(cached,), daemon=True).start()
-    if prepare_reference:
-        threading.Thread(target=reference.prepare, daemon=True).start()
 
     def translate(text):
         return get_model().translate(text)
@@ -248,15 +244,12 @@ def serve(warm_model=False, prepare_reference=False):
         try:
             request = json.loads(line)
             text = base64.b64decode(request["line"]).decode("utf-8")
-            corrected = reference.correct(text) if request.get("reference", False) else text
-            changed = corrected if corrected != text else None
-            text = corrected
             translated = pack.lookup(text, translate if request["local"] else None) if request.get("pack", True) else None
             provider = "GTA 6 paketi"
             if not translated and request["local"]:
                 translated = translate(text)
                 provider = "OPUS-MT"
-            reply = {"text": translated, "provider": provider, "pack": pack.status, "source": changed}
+            reply = {"text": translated, "provider": provider, "pack": pack.status}
         except Exception as exc:
             reply = {"error": str(exc)}
         print(json.dumps(reply, ensure_ascii=True), flush=True)
@@ -266,4 +259,4 @@ if __name__ == "__main__":
     if sys.argv[1:] == ["--sync-pack"]:
         GamePack(Path(os.environ["LOCALAPPDATA"]) / "Replik" / "packs").sync()
     else:
-        serve("--warm-model" in sys.argv[1:], "--prepare-reference" in sys.argv[1:])
+        serve("--warm-model" in sys.argv[1:])

@@ -35,7 +35,7 @@ jobs:
       - name: Build full and upgrade installers
         run: |
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
-          ./build.ps1 -Compiler $iscc -PackageOnly -CachePatchFrom 1.0.33
+          ./build.ps1 -Compiler $iscc -PackageOnly -CachePatchFrom 1.0.34
       - name: Verify cache cleanup, upgrade and installed captions
         run: |
           $ErrorActionPreference='Stop'
@@ -49,9 +49,9 @@ jobs:
           $model=Get-Item "$dir/local/model/model.bin"
           $stamp=$model.LastWriteTimeUtc
           $quiet=@('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART')
-          $previous=Join-Path $env:RUNNER_TEMP 'AccelSubs-1.0.33-update.exe'
-          curl.exe -fsSL --retry 2 https://github.com/blackmons5/replik-altyazi/releases/download/v1.0.33/Replik-Guncelleme-x64-r1.exe -o $previous
-          if ($LASTEXITCODE -or (Get-FileHash $previous).Hash -ne 'ab2e7733ef80e4e69396ec1cd446bfa275b0b0796299852bd728efd2c522bc56') {throw 'Previous update download failed'}
+          $previous=Join-Path $env:RUNNER_TEMP 'AccelSubs-1.0.34-update.exe'
+          curl.exe -fsSL --retry 2 https://github.com/blackmons5/replik-altyazi/releases/download/v1.0.34/Replik-Guncelleme-x64-r1.exe -o $previous
+          if ($LASTEXITCODE -or (Get-FileHash $previous).Hash -ne '0d3cd913c8d25ac2eeb64d2bc8922dfed7f9373c0fc449e976e20f878aa0f75f') {throw 'Previous update download failed'}
           $p=Start-Process $previous -ArgumentList $quiet -WindowStyle Hidden -Wait -PassThru
           if ($p.ExitCode) {throw "Previous update failed: $($p.ExitCode)"}
           $ocr=Get-Item "$dir/ocr/models/det.onnx"
@@ -87,8 +87,10 @@ jobs:
           if ((Get-Item $ocr.FullName).LastWriteTimeUtc -ne $ocrStamp) {throw 'Existing OCR model was replaced by small patch'}
           if ((Get-Item $model.FullName).LastWriteTimeUtc -ne $stamp) {throw 'Existing OPUS-MT model was replaced by small patch'}
           if ((Get-FileHash "$dir/Replik.exe").Hash -ne (Get-FileHash build/app/Replik.exe).Hash) {throw 'Small patch did not update the app'}
-          if ((Get-FileHash "$dir/local/reference.py").Hash -ne (Get-FileHash build/app/local/reference.py).Hash) {throw 'Small patch did not install the English reference module'}
-          Write-Host 'The small patch installed English reference support, cleared the update cache and preserved settings and models.'
+          foreach($worker in @('ocr/read.py','local/translate.py')) {
+            if ((Get-FileHash "$dir/$worker").Hash -ne (Get-FileHash "build/app/$worker").Hash) {throw "Rollback did not restore $worker"}
+          }
+          if (Test-Path "$dir/local/reference.py") {throw 'Obsolete reference module remains'}
           $csc=Join-Path $env:WINDIR 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
           & $csc /nologo /codepage:65001 /platform:x64 /target:exe "/out:$dir/InstalledCaption.exe" /r:System.Drawing.dll /r:System.Windows.Forms.dll (Get-Item tests/InstalledCaption.cs).FullName
           if ($LASTEXITCODE) {throw 'Installed application test build failed'}

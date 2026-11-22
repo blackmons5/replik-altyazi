@@ -15,13 +15,11 @@ namespace Replik {
             public string text {get;set;}
             public string provider {get;set;}
             public string pack {get;set;}
-            public string source {get;set;}
             public string error {get;set;}
         }
-        public LocalTranslator(CancellationToken token,bool prepareReference=false) {
+        public LocalTranslator(CancellationToken token) {
             string root=Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"local");
-            var args="-B -u translate.py --warm-model"+(prepareReference?" --prepare-reference":"");
-            var start=new ProcessStartInfo(Path.Combine(root,"python.exe"),args) {
+            var start=new ProcessStartInfo(Path.Combine(root,"python.exe"),"-B -u translate.py --warm-model") {
                 WorkingDirectory=root, CreateNoWindow=true, UseShellExecute=false,
                 RedirectStandardInput=true, RedirectStandardOutput=true
             };
@@ -31,11 +29,11 @@ namespace Replik {
         void Kill() {
             try { if(!worker.HasExited) worker.Kill(); } catch(InvalidOperationException) {}
         }
-        public async Task<Reply> Read(string text,bool local,CancellationToken token,bool usePack=true,bool useReference=false) {
+        public async Task<Reply> Read(string text,bool local,CancellationToken token,bool usePack=true) {
             await turn.WaitAsync(token).ConfigureAwait(false);
             try {
                 var json=new JavaScriptSerializer();
-                string request=json.Serialize(new {line=Convert.ToBase64String(Encoding.UTF8.GetBytes(text)),local=local,pack=usePack,reference=useReference});
+                string request=json.Serialize(new {line=Convert.ToBase64String(Encoding.UTF8.GetBytes(text)),local=local,pack=usePack});
                 // The JSON envelope and base64 payload contain ASCII only. Write the
                 // bytes directly so the Windows console code page cannot add a BOM.
                 var bytes=Encoding.ASCII.GetBytes(request+"\n");

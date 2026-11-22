@@ -6,9 +6,9 @@ using System.Threading.Tasks;
 namespace Replik {
     // The capture loop owns cue state. Completed work is shown only for the still-current cue.
     sealed class Dialogue {
-        const int FirstTranslationGap=1000;
-        const int VisibleReadingGap=1200;
-        const int MinimumLateCaption=850;
+        const int FirstTranslationGap=700;
+        const int VisibleReadingGap=500;
+        const int MinimumLateCaption=250;
         const int ReturnWindow=1800;
         const int VariationWindow=850;
         const int ConfirmationWindow=650;
@@ -16,7 +16,6 @@ namespace Replik {
             internal string Text;
             internal float Confidence;
             internal long Seen,LastSeen;
-            internal SubtitleAnchor Anchor;
         }
         sealed class Job : IDisposable {
             internal Cue Cue;
@@ -31,8 +30,8 @@ namespace Replik {
         Cue captured,earlierCapture,visibleCue;
         Job pending;
         string shown="",uncertain="";
+        bool hideForChange;
         long uncertainSeen,blankSince=-1,shownAt;
-        internal SubtitleAnchor VisibleAnchor {get {return visibleCue==null?default(SubtitleAnchor):visibleCue.Anchor;}}
 
         public Dialogue(Func<string,Task<string>> translate) : this((text,token)=>translate(text)) {}
         public Dialogue(Func<string,CancellationToken,Task<string>> translate,int textDifference=3) {
@@ -50,7 +49,7 @@ namespace Replik {
             return MatchesText(text,cue.Text,Math.Min(confidence,cue.Confidence)<.88f) ||
                 (textDifference>0 && SubtitleText.IsClippedRead(text,cue.Text));
         }
-        internal void Observe(string text,float confidence,long now,bool gtaRow=false,SubtitleAnchor anchor=default(SubtitleAnchor)) {
+        internal void Observe(string text,float confidence,long now,bool gtaRow=false) {
             text=SubtitleText.Clean(text);
             if(text.Length==0 || confidence<.55f) {
                 if(now-uncertainSeen>ConfirmationWindow) uncertain="";
@@ -60,20 +59,20 @@ namespace Replik {
             if(captured!=null && (blankSince<0 || now-captured.LastSeen<=ReturnWindow) &&
                 MatchesCapture(text,confidence,captured,now)) {
                 captured.LastSeen=now;
-                captured.Anchor=anchor;
                 blankSince=-1;
                 uncertain="";
+                hideForChange=false;
                 return;
             }
             if(earlierCapture!=null && earlierCapture.Text.Length>=12 && now-captured.Seen<=350 &&
                 now-earlierCapture.LastSeen<=ReturnWindow && MatchesCapture(text,confidence,earlierCapture,now)) {
                 earlierCapture.LastSeen=now;
-                earlierCapture.Anchor=anchor;
                 var intervening=captured;
                 captured=earlierCapture;
                 earlierCapture=intervening;
                 blankSince=-1;
                 uncertain="";
+                hideForChange=false;
                 return;
             }
             // Confirm less certain changes on a second frame without delaying clear subtitles.
@@ -85,13 +84,17 @@ namespace Replik {
                 (now-uncertainSeen>ConfirmationWindow || !MatchesText(text,uncertain,true))) {
                 if(blankSince<0) blankSince=now;
                 uncertain=text; uncertainSeen=now;
-                // Keep the displayed caption while a different reading is being verified.
+                // Keep one-off noise from dispatching a translation. Hide the old
+                // caption while a plausible, different subtitle is being verified.
+                hideForChange=hideForChange || gtaRow && confidence>=.74f &&
+                    (hasSentenceEnd || text.Split(' ').Length>=4);
                 return;
             }
             uncertain="";
+            hideForChange=false;
             blankSince=-1;
             earlierCapture=captured;
-            captured=new Cue {Text=text,Confidence=confidence,Seen=now,LastSeen=now,Anchor=anchor};
+            captured=new Cue {Text=text,Confidence=confidence,Seen=now,LastSeen=now};
         }
         void RetirePending() {
             if(pending==null) return;
@@ -128,9 +131,10 @@ namespace Replik {
             long grace=hasCaption?Math.Max(VisibleReadingGap,shownAt-blankSince+MinimumLateCaption):FirstTranslationGap;
             if(uncertain.Length>0 && !hasCaption) grace=0;
             var current=blankSince>=0 && now-blankSince>=grace?null:captured;
-            // Keep work for the current cue through an OCR gap. A different confirmed cue supersedes it.
+            // Hide immediately after a dropout, but keep work for the same cue
+            // through a short OCR gap. A different confirmed cue always supersedes it.
             if(pending!=null && (pending.Cue!=captured || (current==null && now-blankSince>=ReturnWindow))) RetirePending();
-            if(current==null) return Show(null,"");
+            if(current==null || hideForChange) return Show(null,"");
             if(current==visibleCue) return null;
 
             string cached;
@@ -162,6 +166,7 @@ namespace Replik {
             RetirePending();
             captured=earlierCapture=visibleCue=null;
             shown=uncertain="";
+            hideForChange=false;
             blankSince=-1;
         }
         internal void Finish() {

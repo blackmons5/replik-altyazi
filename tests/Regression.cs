@@ -295,7 +295,9 @@ namespace Replik {
             completedRead.Observe("Get in the",.95f,0);
             Check(completedRead.Tick(0)=="Get in the","Show the initial read");
             completedRead.Observe("Get in the car!",.97f,250);
-            Check(completedRead.Tick(250)=="Get in the car!","Complete a partial reading in place");
+            Check(completedRead.Tick(250)==null,"A longer OCR reading keeps the first displayed translation");
+            completedRead.Observe("Get out now!",.97f,350);
+            Check(completedRead.Tick(350)=="Get out now!","A new line still replaces the pinned reading");
             int calls=0;
             var returns=new Dialogue(s=>{calls++; return Task.FromResult("Burada kal.");});
             returns.Observe("Stay right here.",.96f,0);
@@ -325,7 +327,7 @@ namespace Replik {
             changing.Observe("Stay here.",.96f,0,true);
             Check(changing.Tick(0)=="Burada kal.","Original subtitle is on screen");
             changing.Observe("We just need to wait for the right time,",.80f,100,true);
-            Check(changing.Tick(100)=="","A plausible new line immediately hides the outdated translation");
+            Check(changing.Tick(100)==null,"One unconfirmed reading keeps the first translation visible");
             changing.Observe("",0,250,true);
             Check(changing.Tick(250)==null,"An intervening OCR miss cannot restore the outdated translation");
             changing.Observe("We just need to wait for the right time,",.81f,515,true);

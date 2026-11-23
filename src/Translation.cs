@@ -97,8 +97,10 @@ namespace Replik {
         readonly bool local;
         readonly OcrSettings ocrSettings;
         readonly Action<string,string> report;
+        readonly Func<Rectangle> captionBounds;
         public Session(Target target,RectangleF fraction,string key,string model,bool local,OcrSettings ocrSettings,
-            Action<string> reading,Action<long,long> timings,Action<string,string> report) {
+            Action<string> reading,Action<long,long> timings,Action<string,string> report,Func<Rectangle> captionBounds) {
+            this.captionBounds=captionBounds;
             this.local=local;
             this.ocrSettings=ocrSettings;
             this.target=target; this.reading=reading; this.timings=timings; this.fraction=fraction; this.key=key; this.model=model; this.report=report;
@@ -228,7 +230,18 @@ namespace Replik {
                 if(gtaMode && !SystemInformationVisible(area)) area=tight;
                 if(area.Width<60 || area.Height<12 || !SystemInformationVisible(area)) return sample;
                 var elapsed=System.Diagnostics.Stopwatch.StartNew();
+                var before=captionBounds();
                 using(var image=Desktop.Capture(area)) {
+                    var after=captionBounds();
+                    if(before!=after) {
+                        sample.Window=window;
+                        return sample;
+                    }
+                    var covered=Rectangle.Intersect(area,after);
+                    if(!covered.IsEmpty) {
+                        covered.Offset(-area.Left,-area.Top);
+                        using(var g=Graphics.FromImage(image)) g.FillRectangle(Brushes.Black,covered);
+                    }
                     if(Desktop.GetForegroundWindow()!=window) return sample;
                     sample.Window=window;
                     if(!gate.ShouldRead(window,area,OcrChangeGate.Mark(image),clock.ElapsedMilliseconds)) {

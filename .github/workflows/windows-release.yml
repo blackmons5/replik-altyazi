@@ -37,7 +37,7 @@ jobs:
       - name: Build full and upgrade installers
         run: |
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
-          ./build.ps1 -Compiler $iscc -PackageOnly -CachePatchFrom 1.0.36
+          ./build.ps1 -Compiler $iscc -PackageOnly -CachePatchFrom 1.0.37
       - name: Verify cache cleanup, upgrade and installed captions
         run: |
           $ErrorActionPreference='Stop'
@@ -51,9 +51,9 @@ jobs:
           $model=Get-Item "$dir/local/model/model.bin"
           $stamp=$model.LastWriteTimeUtc
           $quiet=@('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART')
-          $previous=Join-Path $env:RUNNER_TEMP 'AccelSubs-1.0.36-update.exe'
-          curl.exe -fsSL --retry 2 https://github.com/blackmons5/replik-altyazi/releases/download/v1.0.36/Replik-Guncelleme-x64-r1.exe -o $previous
-          if ($LASTEXITCODE -or (Get-FileHash $previous).Hash -ne 'e3245141b3eae712aa889c958b6cd6a18ab6201dbd961085f16dc186c60e3ff7') {throw 'Previous update download failed'}
+          $previous=Join-Path $env:RUNNER_TEMP 'AccelSubs-1.0.37-update.exe'
+          curl.exe -fsSL --retry 2 https://github.com/blackmons5/replik-altyazi/releases/download/v1.0.37/Replik-Guncelleme-x64-r1.exe -o $previous
+          if ($LASTEXITCODE -or (Get-FileHash $previous).Hash -ne '2531948338feeef2a896095defebfefa12e1465a39779245ca4bb5287597a396') {throw 'Previous update download failed'}
           $p=Start-Process $previous -ArgumentList $quiet -WindowStyle Hidden -Wait -PassThru
           if ($p.ExitCode) {throw "Previous update failed: $($p.ExitCode)"}
           $ocr=Get-Item "$dir/ocr/models/det.onnx"

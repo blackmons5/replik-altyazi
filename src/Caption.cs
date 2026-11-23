@@ -11,6 +11,20 @@ namespace Replik {
         Bitmap card;
         string last="";
         Rectangle previousWindow, previousArea;
+        volatile RegionBounds capturedCard;
+        sealed class RegionBounds {
+            internal readonly Rectangle Value;
+            internal RegionBounds(Rectangle value) {Value=value;}
+        }
+        internal Rectangle CaptureBounds() {
+            var cardBounds=capturedCard;
+            return cardBounds==null?Rectangle.Empty:cardBounds.Value;
+        }
+        protected override void OnVisibleChanged(EventArgs e) {
+            base.OnVisibleChanged(e);
+            capturedCard=Visible?new RegionBounds(Bounds):null;
+        }
+        [DllImport("user32.dll")] static extern uint GetDpiForWindow(IntPtr hwnd);
         internal Caption() {
             FormBorderStyle=FormBorderStyle.None; ShowInTaskbar=false; TopMost=true;
             StartPosition=FormStartPosition.Manual; AutoScaleMode=AutoScaleMode.None; DoubleBuffered=true;
@@ -18,7 +32,7 @@ namespace Replik {
         }
         protected override bool ShowWithoutActivation {get {return true;}}
         protected override CreateParams CreateParams {get {var p=base.CreateParams; p.ExStyle|=0x08000000|0x20|0x80; return p;}}
-        internal void Place(string line,Rectangle window,Rectangle area) {
+        internal void Place(string line,Rectangle window,Rectangle area,IntPtr target,bool gta) {
             if(line.Length==0 || window.Width<160) {Hide(); return;}
             if(Visible && line==last && window==previousWindow && area==previousArea) return;
             var next=Render(line,window.Size);
@@ -26,6 +40,9 @@ namespace Replik {
             int gap=Math.Max(3,window.Height/190);
             int y=area.Top-gap-next.Height;
             if(y<window.Top) y=area.Bottom+gap;
+            int offset=(int)Math.Round(Math.Max(96u,GetDpiForWindow(target))*2/2.54);
+            int limit=gta?Desktop.Pixels(window,Desktop.Bands[0]).Top-gap:window.Bottom;
+            y=Math.Max(window.Top,Math.Min(y+offset,limit-next.Height));
             if(y+next.Height>window.Bottom) {next.Dispose(); Hide(); return;}
             if(card!=null) card.Dispose();
             card=next;
@@ -33,6 +50,7 @@ namespace Replik {
             using(var path=RoundBox(card.Size,window.Height)) Region=new Region(path);
             last=line; previousWindow=window; previousArea=area;
             if(!Visible) Show();
+            capturedCard=new RegionBounds(Bounds);
             Invalidate();
         }
         protected override void OnPaint(PaintEventArgs e) {

@@ -1,3 +1,3 @@
-## AccelSubs 1.0.37
+## AccelSubs 1.0.38
 
-Yerel OPUS-MT modunda, tek bir sahne satırı güvenle tanındığında aynı sahnede hemen ardından gelen kısa repliğe ait çeviri arka planda hazırlanabilir. Hazırlanan çeviri yalnızca OCR aynı repliği doğruladığında gösterilir. Sahne sınırında tahmin yapılmaz. 1.0.36 kuruluysa küçük güncellemeyi kullanabilirsin.
+İlk gösterilen çeviri, aynı satırın daha uzun OCR okumasında korunur. Tek bir belirsiz okuma kutuyu hemen gizlemez. Altyazı yaklaşık 2 cm aşağı taşındı. GTA penceresi küçükse İngilizce altyazıya yer bırakılır. Türkçe kutunun kapladığı alan OCR görüntüsünden çıkarılır.

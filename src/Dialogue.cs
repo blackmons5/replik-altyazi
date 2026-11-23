@@ -30,7 +30,6 @@ namespace Replik {
         Cue captured,earlierCapture,visibleCue;
         Job pending;
         string shown="",uncertain="";
-        bool hideForChange;
         long uncertainSeen,blankSince=-1,shownAt;
 
         public Dialogue(Func<string,Task<string>> translate) : this((text,token)=>translate(text)) {}
@@ -47,7 +46,9 @@ namespace Replik {
         bool MatchesCapture(string text,float confidence,Cue cue,long now) {
             if(now-cue.LastSeen>VariationWindow) return SubtitleText.SameLine(text,cue.Text,false);
             return MatchesText(text,cue.Text,Math.Min(confidence,cue.Confidence)<.88f) ||
-                (textDifference>0 && SubtitleText.IsClippedRead(text,cue.Text));
+                (textDifference>0 && (SubtitleText.IsClippedRead(text,cue.Text) ||
+                 (shown.Length>0 && cue==visibleCue && blankSince<0 &&
+                  ".!?…".IndexOf(cue.Text[cue.Text.Length-1])<0 && SubtitleText.IsClippedRead(cue.Text,text))));
         }
         internal void Observe(string text,float confidence,long now,bool gtaRow=false) {
             text=SubtitleText.Clean(text);
@@ -61,7 +62,6 @@ namespace Replik {
                 captured.LastSeen=now;
                 blankSince=-1;
                 uncertain="";
-                hideForChange=false;
                 return;
             }
             if(earlierCapture!=null && earlierCapture.Text.Length>=12 && now-captured.Seen<=350 &&
@@ -72,7 +72,6 @@ namespace Replik {
                 earlierCapture=intervening;
                 blankSince=-1;
                 uncertain="";
-                hideForChange=false;
                 return;
             }
             // Confirm less certain changes on a second frame without delaying clear subtitles.
@@ -84,14 +83,9 @@ namespace Replik {
                 (now-uncertainSeen>ConfirmationWindow || !MatchesText(text,uncertain,true))) {
                 if(blankSince<0) blankSince=now;
                 uncertain=text; uncertainSeen=now;
-                // Keep one-off noise from dispatching a translation. Hide the old
-                // caption while a plausible, different subtitle is being verified.
-                hideForChange=hideForChange || gtaRow && confidence>=.74f &&
-                    (hasSentenceEnd || text.Split(' ').Length>=4);
                 return;
             }
             uncertain="";
-            hideForChange=false;
             blankSince=-1;
             earlierCapture=captured;
             captured=new Cue {Text=text,Confidence=confidence,Seen=now,LastSeen=now};
@@ -134,7 +128,7 @@ namespace Replik {
             // Hide immediately after a dropout, but keep work for the same cue
             // through a short OCR gap. A different confirmed cue always supersedes it.
             if(pending!=null && (pending.Cue!=captured || (current==null && now-blankSince>=ReturnWindow))) RetirePending();
-            if(current==null || hideForChange) return Show(null,"");
+            if(current==null) return Show(null,"");
             if(current==visibleCue) return null;
 
             string cached;
@@ -166,7 +160,6 @@ namespace Replik {
             RetirePending();
             captured=earlierCapture=visibleCue=null;
             shown=uncertain="";
-            hideForChange=false;
             blankSince=-1;
         }
         internal void Finish() {

@@ -169,7 +169,7 @@ namespace Replik {
             if (h==IntPtr.Zero) {overlay.Hide(); return;}
             var bounds=Desktop.Bounds(h);
             var captureBand=fraction==Desktop.Bands[0]?Desktop.WideGtaBand:fraction;
-            overlay.Place(caption,bounds,Desktop.Pixels(bounds,captureBand));
+            overlay.Place(caption,bounds,Desktop.Pixels(bounds,captureBand),h,fraction==Desktop.Bands[0]);
         }
         async Task Toggle() {
             if (running!=null) { running.Cancel(); start.Enabled=false; return; }
@@ -200,7 +200,7 @@ namespace Replik {
                 latency.Text="Son ölçümler  •  Görüntü ve OCR: "+ocrTime+"  •  Çeviri: "+apiTime;
             });
             var session=new Session(target,fraction,apiKey,modelId,local,ocrSettings,line=>((IProgress<string>)reads).Report(line),
-                (ocr,api)=>metrics.Report(Tuple.Create(ocr,api)),(s,c)=>((IProgress<Tuple<string,string>>)progress).Report(Tuple.Create(s,c)));
+                (ocr,api)=>metrics.Report(Tuple.Create(ocr,api)),(s,c)=>((IProgress<Tuple<string,string>>)progress).Report(Tuple.Create(s,c)),overlay.CaptureBounds);
             string result="Çeviri durduruldu.";
             try { await Task.Run(()=>session.Run(source.Token)); }
             catch (OperationCanceledException) { if (!source.IsCancellationRequested) result="Gemini yanıt süresi doldu. Yeniden başlat."; }

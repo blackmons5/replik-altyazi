@@ -1,5 +1,6 @@
 """Replik's persistent CPU translator. The parent exchanges ASCII JSON lines."""
 import base64
+from concurrent.futures import ThreadPoolExecutor
 import gzip
 import hashlib
 import json
@@ -215,6 +216,49 @@ class Opus:
         return result
 
 
+class Preview:
+    """One speculative CPU job, consumed only by its exact confirmed source."""
+    def __init__(self):
+        self.pool = ThreadPoolExecutor(max_workers=1)
+        self.job = None
+        self.source = None
+
+    def schedule(self, source, infer):
+        self.stop()
+        wake = threading.Event()
+        cancelled = threading.Event()
+        self.cancelled = cancelled
+        self.wake = wake
+        self.source = source
+        def prepare():
+            # Give the next real request a chance to supersede a fast-changing cue.
+            wake.wait(.35)
+            if cancelled.is_set():
+                return None
+            return infer(source)
+        self.job = self.pool.submit(prepare)
+
+    def stop(self):
+        self.source = None
+        if self.job is not None:
+            self.cancelled.set()
+            self.job.cancel()
+            self.wake.set()
+            self.job = None
+
+    def take(self, source):
+        if self.job is None or self.source != source:
+            self.stop()
+            return None
+        self.wake.set()
+        try:
+            return self.job.result()
+        except Exception:
+            return None
+        finally:
+            self.stop()
+
+
 def serve(warm_model=False):
     index = ScriptIndex(MODEL.parent / "dialogue.sqlite3")
     generation = None
@@ -249,7 +293,8 @@ def serve(warm_model=False):
     cached = pack.restore()
     threading.Thread(target=pack.refresh, args=(cached,), daemon=True).start()
 
-    def translate(text):
+    preview = Preview()
+    def cached_translation(text):
         if memory is not None:
             try:
                 hit = memory.execute("SELECT target FROM translations WHERE source=?", (text,)).fetchone()
@@ -257,7 +302,16 @@ def serve(warm_model=False):
                     return hit[0]
             except sqlite3.Error:
                 pass
-        result = get_model().translate(text)
+        return None
+
+    def infer(text):
+        return get_model().translate(text)
+
+    def translate(text, prepared=None):
+        result = cached_translation(text)
+        if result:
+            return result
+        result = prepared or infer(text)
         if memory is not None and result and Opus.word.search(result) and not Opus.placeholder.search(result):
             try:
                 with memory:
@@ -267,6 +321,7 @@ def serve(warm_model=False):
         return result
 
     for line in sys.stdin.buffer:
+        candidate = None
         try:
             request = json.loads(line)
             text = base64.b64decode(request["line"]).decode("utf-8")
@@ -274,19 +329,31 @@ def serve(warm_model=False):
             if request.get("script", False):
                 if generation != request.get("generation"):
                     index.position = None
+                    preview.stop()
                     generation = request.get("generation")
                 text = index.resolve(text)
                 matched = index.matched
+            prepared = None
+            if matched and request["local"]:
+                prepared = preview.take(text)
+                candidate = index.next_line
+            else:
+                preview.stop()
             use_pack = request.get("pack", True) and not (matched and request["local"])
             translated = pack.lookup(text, translate if request["local"] else None) if use_pack else None
             provider = "GTA 6 paketi"
             if not translated and request["local"]:
-                translated = translate(text)
-                provider = "OPUS-MT"
+                translated = translate(text, prepared)
+                provider = "OPUS-MT (prefetch)" if prepared else "OPUS-MT"
             reply = {"text": translated, "provider": provider, "pack": pack.status, "source": text if matched else None}
         except Exception as exc:
+            candidate = None
             reply = {"error": str(exc)}
         print(json.dumps(reply, ensure_ascii=True), flush=True)
+        if candidate and not cached_translation(candidate):
+            preview.schedule(candidate, infer)
+    preview.stop()
+    preview.pool.shutdown()
 
 
 if __name__ == "__main__":

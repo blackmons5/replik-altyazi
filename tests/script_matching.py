@@ -18,9 +18,13 @@ index = ScriptIndex(db)
 assert index.db.execute("SELECT count(*) FROM cue").fetchone()[0] == 152679
 assert index.resolve("When's the last time you played?", 0) == "When's the last time you played?"
 assert index.position[:2] == ("ACBBL_FIRST_INSTANCE", 1)
+assert index.next_line == "Oof. Uh, high school?"
 assert index.resolve("Oof. Uh, high schooi?", 1) == "Oof. Uh, high school?"
 assert index.position[:2] == ("ACBBL_FIRST_INSTANCE", 2)
 assert index.resolve("Jason: You never toid me that.", 2) == "Jason: You never told me that."
+assert index.next_line is None
+assert index.resolve("FinaIly, about fuckin' time!", 15) == "Finally, about fuckin' time!"
+assert index.next_line is None  # 3498 belongs to a different scene.
 assert index.resolve("No sign of Halifox.", 20) == "No sign of Halifax."
 for miss in ("G0!", "Don't sell the 40 boats.", "Completely invented diagnostic phrase."):
     assert index.resolve(miss, 21) == miss and not index.matched
@@ -59,6 +63,25 @@ with TemporaryDirectory() as profile:
         cache.execute("UPDATE translations SET target=?", ("Halifax görünmüyor.",))
         cache.commit()
     assert run("No sign of Halifax.")["text"] == "Halifax görünmüyor."
+    with subprocess.Popen([sys.executable, "-B", "-u", str(runtime / "translate.py")],
+                          stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                          env={**os.environ, "LOCALAPPDATA": profile}) as worker:
+        def ask(text, generation=1):
+            payload = {"line": base64.b64encode(text.encode()).decode(), "local": True,
+                       "script": True, "generation": generation}
+            worker.stdin.write(json.dumps(payload).encode() + b"\n")
+            worker.stdin.flush()
+            return json.loads(worker.stdout.readline())
+        first = "When's the last time you played?"
+        second = "Oof. Uh, high school?"
+        assert ask(first)["source"] == first
+        confirmed = ask("Oof. Uh, high schooi?")
+        assert confirmed["source"] == second and confirmed["provider"] == "OPUS-MT (prefetch)"
+        # Changing session must drop the pending third line even when its text agrees.
+        changed = ask("You never told me that.", generation=2)
+        assert changed["source"] == "You never told me that." and changed["provider"] == "OPUS-MT"
+        worker.stdin.close()
+        assert worker.wait(timeout=30) == 0
 
 samples = [r[0] for r in index.db.execute("SELECT text FROM cue WHERE id%601=0")]
 times = []

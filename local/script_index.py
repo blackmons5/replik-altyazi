@@ -93,6 +93,7 @@ class ScriptIndex:
 
     def resolve(self, raw, now=None):
         self.matched = False
+        self.next_line = None
         if self.db is None:
             return raw
         now = time.monotonic() if now is None else now
@@ -148,6 +149,10 @@ class ScriptIndex:
             return raw
         if len(rows) == 1 and rows[0]["scene"] and len(k) >= 12:
             self.position = rows[0]["scene"], rows[0]["id"], now
+            following = self.db.execute("SELECT text FROM cue WHERE id=? AND scene=?",
+                                        (rows[0]["id"] + 1, rows[0]["scene"])).fetchone()
+            if following and not prefix and following[0] != rows[0]["text"] and len(following[0]) <= 160:
+                self.next_line = following[0]
         elif not any(r["id"] == n["id"] for r in rows for n in near):
             self.position = None
         self.matched = True

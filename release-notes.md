@@ -1,3 +1,3 @@
-## AccelSubs 1.0.36
+## AccelSubs 1.0.37
 
-GTA alt altyazı alanı için 152.679 İngilizce replik, sahne kodlarıyla birlikte kurulumda gelir. Güvenilir OCR eşleşmesi yerel OPUS-MT ile çevrilir. Aynı İngilizce metnin yerel çevirisi sonraki oturumlarda da kullanılır. Eşleşmeyen okumalar mevcut çeviri akışına gider. 1.0.35 için küçük güncelleme kullanılabilir.
+Yerel OPUS-MT modunda, tek bir sahne satırı güvenle tanındığında aynı sahnede hemen ardından gelen kısa repliğe ait çeviri arka planda hazırlanabilir. Hazırlanan çeviri yalnızca OCR aynı repliği doğruladığında gösterilir. Sahne sınırında tahmin yapılmaz. 1.0.36 kuruluysa küçük güncellemeyi kullanabilirsin.

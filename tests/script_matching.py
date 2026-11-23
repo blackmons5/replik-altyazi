@@ -1,4 +1,5 @@
 import base64
+from contextlib import closing
 import json
 import os
 from pathlib import Path
@@ -53,9 +54,10 @@ with TemporaryDirectory() as profile:
         return json.loads(result.stdout)
     first = run("No sign of Halifox.")
     assert first["source"] == "No sign of Halifax." and first["text"] and first["provider"] == "OPUS-MT"
-    with sqlite3.connect(Path(profile) / "Replik/opus-en-tr-r1.sqlite3") as cache:
+    with closing(sqlite3.connect(Path(profile) / "Replik/opus-en-tr-r1.sqlite3")) as cache:
         assert cache.execute("SELECT source,target FROM translations").fetchall() == [(first["source"], first["text"])]
         cache.execute("UPDATE translations SET target=?", ("Halifax görünmüyor.",))
+        cache.commit()
     assert run("No sign of Halifax.")["text"] == "Halifax görünmüyor."
 
 samples = [r[0] for r in index.db.execute("SELECT text FROM cue WHERE id%601=0")]

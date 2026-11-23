@@ -268,6 +268,7 @@ def serve(warm_model=False):
         folder.mkdir(parents=True, exist_ok=True)
         memory = sqlite3.connect(folder / "opus-en-tr-r1.sqlite3", timeout=0)
         memory.execute("CREATE TABLE IF NOT EXISTS translations(source TEXT PRIMARY KEY, target TEXT NOT NULL)")
+        memory.execute("CREATE TABLE IF NOT EXISTS shown(scope TEXT, source TEXT, target TEXT NOT NULL, PRIMARY KEY(scope,source)) WITHOUT ROWID")
     except (OSError, sqlite3.Error):
         memory = None
     pack = GamePack(Path(os.environ["LOCALAPPDATA"]) / "Replik" / "packs")
@@ -325,6 +326,14 @@ def serve(warm_model=False):
         try:
             request = json.loads(line)
             text = base64.b64decode(request["line"]).decode("utf-8")
+            scope = request.get("scope")
+            if request.get("save") is not None:
+                value = base64.b64decode(request["save"]).decode("utf-8")
+                if memory is not None and scope and value:
+                    with memory:
+                        memory.execute("INSERT OR IGNORE INTO shown VALUES(?,?,?)", (scope, text, value))
+                print("{}", flush=True)
+                continue
             matched = False
             if request.get("script", False):
                 if generation != request.get("generation"):
@@ -333,6 +342,15 @@ def serve(warm_model=False):
                     generation = request.get("generation")
                 text = index.resolve(text)
                 matched = index.matched
+            if scope and memory is not None:
+                try:
+                    saved = memory.execute("SELECT target FROM shown WHERE scope=? AND source=?", (scope,text)).fetchone()
+                except sqlite3.Error:
+                    saved = None
+                if saved:
+                    preview.stop()
+                    print(json.dumps({"text": saved[0], "provider": "cache", "source": text if matched else None}), flush=True)
+                    continue
             prepared = None
             if matched and request["local"]:
                 prepared = preview.take(text)

@@ -50,8 +50,9 @@ assert ambiguous.resolve(raw, 20) == raw
 
 # Compare output and source provenance through the actual embedded translation process.
 with TemporaryDirectory() as profile:
-    def run(text):
+    def run(text, **options):
         request = {"line": base64.b64encode(text.encode()).decode(), "script": True, "local": True}
+        request.update(options)
         result = subprocess.run([sys.executable, "-B", "-u", str(runtime / "translate.py")],
                                 input=json.dumps(request).encode() + b"\n", stdout=subprocess.PIPE,
                                 env={**os.environ, "LOCALAPPDATA": profile}, check=True, timeout=90)
@@ -63,6 +64,12 @@ with TemporaryDirectory() as profile:
         cache.execute("UPDATE translations SET target=?", ("Halifax görünmüyor.",))
         cache.commit()
     assert run("No sign of Halifax.")["text"] == "Halifax görünmüyor."
+    for scope in ("local-r1", "gemini-test-model"):
+        target = "Kaydedilmiş çeviri " + scope
+        run(first["source"], scope=scope, save=base64.b64encode(target.encode()).decode())
+        reopened = run("No sign of Halifox.", scope=scope)
+        assert reopened["provider"] == "cache" and reopened["text"] == target
+    assert run(first["source"], scope="gemini-new-model")["provider"] != "cache"
     with subprocess.Popen([sys.executable, "-B", "-u", str(runtime / "translate.py")],
                           stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                           env={**os.environ, "LOCALAPPDATA": profile}) as worker:

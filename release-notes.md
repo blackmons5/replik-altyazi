@@ -1,3 +1,3 @@
-## AccelSubs 1.0.38
+## AccelSubs 1.0.39
 
-İlk gösterilen çeviri, aynı satırın daha uzun OCR okumasında korunur. Tek bir belirsiz okuma kutuyu hemen gizlemez. Altyazı yaklaşık 2 cm aşağı taşındı. GTA penceresi küçükse İngilizce altyazıya yer bırakılır. Türkçe kutunun kapladığı alan OCR görüntüsünden çıkarılır.
+Doğrulanan hazır paket ve Gemini çevirileri de oyuncunun bilgisayarında saklanır. Uygulamayı tekrar açıp aynı repliğe geldiğinde seçili modun kayıtlı Türkçesi kullanılır. Önceki OPUS-MT kayıtları korunur. 1.0.38 kuruluysa küçük güncellemeyi kullanabilirsin.

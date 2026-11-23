@@ -30,11 +30,12 @@ namespace Replik {
         void Kill() {
             try { if(!worker.HasExited) worker.Kill(); } catch(InvalidOperationException) {}
         }
-        public async Task<Reply> Read(string text,bool local,CancellationToken token,bool usePack=true,bool script=false,int generation=0) {
+        public async Task<Reply> Read(string text,bool local,CancellationToken token,bool usePack=true,bool script=false,int generation=0,string scope=null,string save=null) {
             await turn.WaitAsync(token).ConfigureAwait(false);
             try {
                 var json=new JavaScriptSerializer();
-                string request=json.Serialize(new {line=Convert.ToBase64String(Encoding.UTF8.GetBytes(text)),local=local,pack=usePack,script=script,generation=generation});
+                string request=json.Serialize(new {line=Convert.ToBase64String(Encoding.UTF8.GetBytes(text)),local=local,pack=usePack,script=script,generation=generation,scope=scope,
+                    save=save==null?null:Convert.ToBase64String(Encoding.UTF8.GetBytes(save))});
                 // The JSON envelope and base64 payload contain ASCII only. Write the
                 // bytes directly so the Windows console code page cannot add a BOM.
                 var bytes=Encoding.ASCII.GetBytes(request+"\n");

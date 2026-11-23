@@ -117,6 +117,7 @@ namespace Replik {
                 var fallback=new GeminiFallback((text,ct)=>Gemini.Translate(key,model,text,ct),
                     async (text,ct)=>(await worker.Read(text,true,ct,false).ConfigureAwait(false)).text);
                 int generation=0;
+                string cacheScope=local?"local-r1":"gemini-"+model;
                 var dialogue=new Dialogue(async (text,cueToken)=>{
                     reading(text);
                     DiagnosticsLog.Local.Write("ocr.accepted");
@@ -125,7 +126,7 @@ namespace Replik {
                         string translated="";
                         string provider="none";
                         try {
-                            var result=await worker.Read(text,local,linked.Token,true,gtaMode,generation).ConfigureAwait(false);
+                            var result=await worker.Read(text,local,linked.Token,true,gtaMode,generation,cacheScope).ConfigureAwait(false);
                             if(result.source!=null) {
                                 text=result.source;
                                 reading(text);
@@ -150,6 +151,12 @@ namespace Replik {
                         }
                         linked.Token.ThrowIfCancellationRequested();
                         translated=SubtitleText.CleanTranslation(text,translated);
+                        // OPUS already persists its own output. Remember validated pack and cloud replies as well.
+                        if(translated.Length>0 && provider!="cache" && !provider.StartsWith("OPUS-MT",StringComparison.Ordinal)) {
+                            try {await worker.Read(text,false,linked.Token,scope:cacheScope,save:translated).ConfigureAwait(false);}
+                            catch(IOException ex) {DiagnosticsLog.Local.Error("cache.write",ex);}
+                            catch(InvalidOperationException ex) {DiagnosticsLog.Local.Error("cache.write",ex);}
+                        }
                         DiagnosticsLog.Local.Write("translation.result","has_output={0} elapsed_ms={1} provider={2}",translated.Length>0,clock.ElapsedMilliseconds-began,provider);
                         if(translated.Length==0) report("Bu replik için geçerli Türkçe çeviri alınamadı.",null);
                         timings(-1,clock.ElapsedMilliseconds-began);

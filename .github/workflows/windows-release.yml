@@ -24,6 +24,8 @@ jobs:
           ./build.ps1 -Compiler $iscc -BuildOnly
       - name: Verify embedded model, community pack, OCR and providers
         run: |
+          & ./build/app/local/python.exe -B tests/script_matching.py build/app/local
+          if ($LASTEXITCODE) {throw 'Subtitle matching or persisted translation failed'}
           & ./build/app/local/python.exe -B tests/local_engine.py build/app/local
           if ($LASTEXITCODE) {throw 'Offline engine or pack test failed'}
           $sources=(Get-Item src/*.cs,tests/Regression.cs).FullName
@@ -35,7 +37,7 @@ jobs:
       - name: Build full and upgrade installers
         run: |
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
-          ./build.ps1 -Compiler $iscc -PackageOnly -CachePatchFrom 1.0.34
+          ./build.ps1 -Compiler $iscc -PackageOnly -CachePatchFrom 1.0.35
       - name: Verify cache cleanup, upgrade and installed captions
         run: |
           $ErrorActionPreference='Stop'
@@ -49,9 +51,9 @@ jobs:
           $model=Get-Item "$dir/local/model/model.bin"
           $stamp=$model.LastWriteTimeUtc
           $quiet=@('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART')
-          $previous=Join-Path $env:RUNNER_TEMP 'AccelSubs-1.0.34-update.exe'
-          curl.exe -fsSL --retry 2 https://github.com/blackmons5/replik-altyazi/releases/download/v1.0.34/Replik-Guncelleme-x64-r1.exe -o $previous
-          if ($LASTEXITCODE -or (Get-FileHash $previous).Hash -ne '0d3cd913c8d25ac2eeb64d2bc8922dfed7f9373c0fc449e976e20f878aa0f75f') {throw 'Previous update download failed'}
+          $previous=Join-Path $env:RUNNER_TEMP 'AccelSubs-1.0.35-update.exe'
+          curl.exe -fsSL --retry 2 https://github.com/blackmons5/replik-altyazi/releases/download/v1.0.35/Replik-Guncelleme-x64-r1.exe -o $previous
+          if ($LASTEXITCODE -or (Get-FileHash $previous).Hash -ne '273365ff4e48c8903a832d6bfd2ae63f21f6150cea6810ccf21fe24a9b62ce28') {throw 'Previous update download failed'}
           $p=Start-Process $previous -ArgumentList $quiet -WindowStyle Hidden -Wait -PassThru
           if ($p.ExitCode) {throw "Previous update failed: $($p.ExitCode)"}
           $ocr=Get-Item "$dir/ocr/models/det.onnx"
@@ -87,7 +89,7 @@ jobs:
           if ((Get-Item $ocr.FullName).LastWriteTimeUtc -ne $ocrStamp) {throw 'Existing OCR model was replaced by small patch'}
           if ((Get-Item $model.FullName).LastWriteTimeUtc -ne $stamp) {throw 'Existing OPUS-MT model was replaced by small patch'}
           if ((Get-FileHash "$dir/Replik.exe").Hash -ne (Get-FileHash build/app/Replik.exe).Hash) {throw 'Small patch did not update the app'}
-          foreach($worker in @('ocr/read.py','local/translate.py')) {
+          foreach($worker in @('ocr/read.py','local/translate.py','local/script_index.py','local/dialogue.sqlite3')) {
             if ((Get-FileHash "$dir/$worker").Hash -ne (Get-FileHash "build/app/$worker").Hash) {throw "Rollback did not restore $worker"}
           }
           if (Test-Path "$dir/local/reference.py") {throw 'Obsolete reference module remains'}

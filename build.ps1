@@ -51,7 +51,11 @@ function Build-Application {
     Fetch 'source.spm' "$upstream/source.spm" '180d3f94ddfee5585d78b702290ded0f4f9bd40f299349c8383b32a579fefad4'
     Fetch 'target.spm' "$upstream/target.spm" 'cd0c475692178b6c626aadaef01bd8f98d8053946938e4e67005fc1e4811d797'
     Copy-Item build/inputs/source.spm,build/inputs/target.spm $modelDir
-    Copy-Item local/translate.py $runtime
+    Copy-Item local/translate.py,local/script_index.py $runtime
+    $database=Join-Path $runtime 'dialogue.sqlite3'
+    if(Test-Path $database){Remove-Item -LiteralPath $database}
+    & "$runtime/python.exe" -B local/script_index.py dialogue-source.zip $database
+    if($LASTEXITCODE){throw 'Subtitle index build failed'}
     Copy-Item local/runtime-id.txt $runtime
     & "$runtime/python.exe" -B -c "import ctranslate2, sentencepiece"
     if ($LASTEXITCODE) {throw 'Bundled local runtime failed to start'}

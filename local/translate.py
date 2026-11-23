@@ -7,6 +7,8 @@ import os
 from pathlib import Path
 import re
 import sys
+import sqlite3
+from script_index import ScriptIndex
 import tempfile
 import threading
 import time
@@ -214,6 +216,16 @@ class Opus:
 
 
 def serve(warm_model=False):
+    index = ScriptIndex(MODEL.parent / "dialogue.sqlite3")
+    generation = None
+    memory = None
+    try:
+        folder = Path(os.environ["LOCALAPPDATA"]) / "Replik"
+        folder.mkdir(parents=True, exist_ok=True)
+        memory = sqlite3.connect(folder / "opus-en-tr-r1.sqlite3", timeout=0)
+        memory.execute("CREATE TABLE IF NOT EXISTS translations(source TEXT PRIMARY KEY, target TEXT NOT NULL)")
+    except (OSError, sqlite3.Error):
+        memory = None
     pack = GamePack(Path(os.environ["LOCALAPPDATA"]) / "Replik" / "packs")
     model = None
     model_lock = threading.Lock()
@@ -238,18 +250,40 @@ def serve(warm_model=False):
     threading.Thread(target=pack.refresh, args=(cached,), daemon=True).start()
 
     def translate(text):
-        return get_model().translate(text)
+        if memory is not None:
+            try:
+                hit = memory.execute("SELECT target FROM translations WHERE source=?", (text,)).fetchone()
+                if hit:
+                    return hit[0]
+            except sqlite3.Error:
+                pass
+        result = get_model().translate(text)
+        if memory is not None and result and Opus.word.search(result) and not Opus.placeholder.search(result):
+            try:
+                with memory:
+                    memory.execute("INSERT OR IGNORE INTO translations VALUES(?,?)", (text, result))
+            except sqlite3.Error:
+                pass
+        return result
 
     for line in sys.stdin.buffer:
         try:
             request = json.loads(line)
             text = base64.b64decode(request["line"]).decode("utf-8")
-            translated = pack.lookup(text, translate if request["local"] else None) if request.get("pack", True) else None
+            matched = False
+            if request.get("script", False):
+                if generation != request.get("generation"):
+                    index.position = None
+                    generation = request.get("generation")
+                text = index.resolve(text)
+                matched = index.matched
+            use_pack = request.get("pack", True) and not (matched and request["local"])
+            translated = pack.lookup(text, translate if request["local"] else None) if use_pack else None
             provider = "GTA 6 paketi"
             if not translated and request["local"]:
                 translated = translate(text)
                 provider = "OPUS-MT"
-            reply = {"text": translated, "provider": provider, "pack": pack.status}
+            reply = {"text": translated, "provider": provider, "pack": pack.status, "source": text if matched else None}
         except Exception as exc:
             reply = {"error": str(exc)}
         print(json.dumps(reply, ensure_ascii=True), flush=True)

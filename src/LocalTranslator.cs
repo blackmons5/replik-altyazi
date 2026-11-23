@@ -16,6 +16,7 @@ namespace Replik {
             public string provider {get;set;}
             public string pack {get;set;}
             public string error {get;set;}
+            public string source {get;set;}
         }
         public LocalTranslator(CancellationToken token) {
             string root=Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"local");
@@ -29,11 +30,11 @@ namespace Replik {
         void Kill() {
             try { if(!worker.HasExited) worker.Kill(); } catch(InvalidOperationException) {}
         }
-        public async Task<Reply> Read(string text,bool local,CancellationToken token,bool usePack=true) {
+        public async Task<Reply> Read(string text,bool local,CancellationToken token,bool usePack=true,bool script=false,int generation=0) {
             await turn.WaitAsync(token).ConfigureAwait(false);
             try {
                 var json=new JavaScriptSerializer();
-                string request=json.Serialize(new {line=Convert.ToBase64String(Encoding.UTF8.GetBytes(text)),local=local,pack=usePack});
+                string request=json.Serialize(new {line=Convert.ToBase64String(Encoding.UTF8.GetBytes(text)),local=local,pack=usePack,script=script,generation=generation});
                 // The JSON envelope and base64 payload contain ASCII only. Write the
                 // bytes directly so the Windows console code page cannot add a BOM.
                 var bytes=Encoding.ASCII.GetBytes(request+"\n");

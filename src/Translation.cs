@@ -114,6 +114,7 @@ namespace Replik {
                 var gate=new OcrChangeGate(ocrSettings);
                 var fallback=new GeminiFallback((text,ct)=>Gemini.Translate(key,model,text,ct),
                     async (text,ct)=>(await worker.Read(text,true,ct,false).ConfigureAwait(false)).text);
+                int generation=0;
                 var dialogue=new Dialogue(async (text,cueToken)=>{
                     reading(text);
                     DiagnosticsLog.Local.Write("ocr.accepted");
@@ -122,7 +123,12 @@ namespace Replik {
                         string translated="";
                         string provider="none";
                         try {
-                            var result=await worker.Read(text,local,linked.Token).ConfigureAwait(false);
+                            var result=await worker.Read(text,local,linked.Token,true,gtaMode,generation).ConfigureAwait(false);
+                            if(result.source!=null) {
+                                text=result.source;
+                                reading(text);
+                                DiagnosticsLog.Local.Write("ocr.script_match");
+                            }
                             translated=SubtitleText.CleanTranslation(text,result.text);
                             if(local && translated.Length==0 && result.provider=="GTA 6 paketi") {
                                 result=await worker.Read(text,true,linked.Token,false).ConfigureAwait(false);
@@ -161,6 +167,7 @@ namespace Replik {
                             var visible=active?sample.Window:IntPtr.Zero;
                             if(first || current!=visible) {
                                 dialogue.Pause();
+                                generation++;
                                 DiagnosticsLog.Local.Write("capture.state","active={0}",active);
                                 report(active?"Oyun görüntüsü okunuyor. Altyazı bekleniyor…":"Oyuna dön. Veyra tanınmazsa listeden oyun görüntüsünün penceresini seç.","");
                                 first=false; current=visible;

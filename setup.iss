@@ -35,6 +35,10 @@ PrivilegesRequired=admin
 Name: "turkish"; MessagesFile: "compiler:Languages\Turkish.isl"
 
 [Files]
+#ifdef Patch
+Source: "build\app\local\dialogue.sqlite3"; DestDir: "{app}\local"; Flags: ignoreversion
+Source: "build\app\local\script_index.py"; DestDir: "{app}\local"; Flags: ignoreversion
+#endif
 Source: "build\app\Replik.exe"; DestDir: "{app}"; Flags: ignoreversion
 #ifndef CachePatchFrom
 Source: "build\app\THIRD-PARTY.txt"; DestDir: "{app}"; Flags: ignoreversion

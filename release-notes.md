@@ -1,3 +1,3 @@
-## AccelSubs 1.0.35
+## AccelSubs 1.0.36
 
-1.0.31 sürümünün OCR, çeviri ve altyazı gösterimi geri getirildi. 1.0.34 kuruluysa küçük güncellemeyi kullanabilirsin. Güncelleyicinin geri dönüşü algılaması için paket sürümü 1.0.35 olarak sunulur.
+GTA alt altyazı alanı için 152.679 İngilizce replik, sahne kodlarıyla birlikte kurulumda gelir. Güvenilir OCR eşleşmesi yerel OPUS-MT ile çevrilir. Aynı İngilizce metnin yerel çevirisi sonraki oturumlarda da kullanılır. Eşleşmeyen okumalar mevcut çeviri akışına gider. 1.0.35 için küçük güncelleme kullanılabilir.
